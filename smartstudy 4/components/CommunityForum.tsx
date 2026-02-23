@@ -1,87 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { User, ForumPost } from '../types'; // Đảm bảo import đúng type
-import { MessageSquare, Heart, Send, Plus, Tag, Search, CheckCircle2, X, Filter, Hash } from 'lucide-react';
-
-// Import Firebase
-import { db } from "../firebaseConfig";
-import { collection, addDoc, onSnapshot, query, orderBy, Timestamp } from "firebase/firestore";
+import { ForumPost, ForumComment } from '../types';
+import { forumService } from '../services/forumService';
+import { User } from '../types';
+import { MessageSquare, Heart, Send, Plus, Tag, Search, User as UserIcon, X, Hash, Filter, CheckCircle2 } from 'lucide-react';
 
 interface CommunityForumProps {
     currentUser: User;
 }
 
 export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) => {
-    // 1. KHAI BÁO STATE (Phải nằm trên cùng)
-    const [posts, setPosts] = useState<any[]>([]); // Tạm thời để any để tránh lỗi type với Firebase
+    const [posts, setPosts] = useState<ForumPost[]>([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newPost, setNewPost] = useState({ title: '', content: '', tags: '' });
     const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
     const [commentText, setCommentText] = useState('');
+    
+    // State for filtering
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
-    // 2. USEEFFECT: Lắng nghe dữ liệu Real-time từ Firebase
+    // 1. Dùng async/await để lấy dữ liệu từ Firebase khi mới vào trang
     useEffect(() => {
-        const q = query(collection(db, "posts"), orderBy("timestamp", "desc"));
-        
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedPosts = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setPosts(fetchedPosts);
-        });
-
-        return () => unsubscribe();
+        const fetchPosts = async () => {
+            const data = await forumService.getPosts();
+            setPosts(data);
+        };
+        fetchPosts();
     }, []);
 
-    // 3. HÀM XỬ LÝ ĐĂNG BÀI (Chỉ giữ lại 1 hàm duy nhất này)
-    const handleCreatePost = async () => {
-        // Validate đầu vào
-        if (!newPost.title.trim() || !newPost.content.trim()) return;
-
-        try {
-            // Tách chuỗi tags "A, B, C" thành mảng ["A", "B", "C"]
-            const tagsArray = newPost.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-
-            await addDoc(collection(db, "posts"), {
-                title: newPost.title,
-                content: newPost.content,
-                tags: tagsArray, // Lưu dưới dạng mảng
-                author: currentUser.name || "Ẩn danh",
-                authorAvatar: currentUser.avatar || "", // Lưu thêm avatar nếu có
-                likes: [], // Khởi tạo mảng like rỗng
-                comments: [], // Khởi tạo mảng comment rỗng
-                timestamp: Timestamp.now(),
-                createdAt: new Date().toISOString() // Dùng để hiển thị ngày tháng
-            });
-
-            // Reset form và đóng modal
-            setNewPost({ title: '', content: '', tags: '' });
-            setIsCreateModalOpen(false);
-            
-            // alert("Đã đăng bài thành công!"); // Có thể bỏ alert cho đỡ phiền
-        } catch (error) {
-            console.error("Lỗi khi đăng bài: ", error);
-            alert("Lỗi: " + error);
-        }
-    };
-
-    // 4. CÁC HÀM XỬ LÝ PHỤ (Tạm thời để trống hoặc console.log để tránh lỗi đỏ khi chưa code xong phần Like/Comment)
-    const handleLike = (postId: string) => {
-        console.log("Tính năng Like đang phát triển cho ID:", postId);
-        // Sau này sẽ code updateDoc vào đây
-    };
-
-    const handleComment = (postId: string) => {
-        if (!commentText.trim()) return;
-        console.log("Tính năng Comment đang phát triển:", commentText);
-        setCommentText('');
-        // Sau này sẽ code updateDoc vào đây
-    };
-
-    // 5. XỬ LÝ LỌC TAGS (Logic hiển thị)
-    // Lấy tất cả tags từ các bài viết để đếm
-    const tagCounts = posts.flatMap(p => p.tags || []).reduce((acc, tag) => {
+    // Get all unique tags and count occurrences to find "Popular" ones
+    const tagCounts = posts.flatMap(p => p.tags).reduce((acc, tag) => {
         acc[tag] = (acc[tag] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
@@ -89,10 +36,82 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
     const sortedTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
 
     const filteredPosts = selectedTag 
-        ? posts.filter(p => p.tags && p.tags.includes(selectedTag)) 
+        ? posts.filter(p => p.tags.includes(selectedTag)) 
         : posts;
 
-    // 6. GIAO DIỆN (Render)
+    // 2. Sửa hàm tạo bài đăng
+    const handleCreatePost = async () => {
+        if (!newPost.title || !newPost.content) return;
+        
+        const post: ForumPost = {
+            id: '', // Firebase sẽ tự tạo ID
+            author: currentUser.username,
+            authorAvatar: currentUser.avatar || '',
+            title: newPost.title,
+            content: newPost.content,
+            tags: newPost.tags.split(',').map(t => t.trim()).filter(t => t),
+            likes: [],
+            comments: [],
+            createdAt: new Date().toISOString()
+        };
+        
+        // Đóng modal và clear form ngay lập tức
+        setIsCreateModalOpen(false);
+        setNewPost({ title: '', content: '', tags: '' });
+
+        // Gọi API tạo post trên Firebase
+        const createdPost = await forumService.createPost(post);
+        
+        // Nối bài mới vào đầu danh sách hiện tại
+        setPosts(prevPosts => [createdPost, ...prevPosts]);
+    };
+
+    // 3. Sửa hàm Like (Cập nhật UI trước, gọi API sau)
+    const handleLike = async (postId: string) => {
+        // Cập nhật giao diện ngay lập tức cho mượt
+        setPosts(prevPosts => prevPosts.map(p => {
+            if (p.id === postId) {
+                const currentLikes = p.likes || [];
+                const isLiked = currentLikes.includes(currentUser.username);
+                return {
+                    ...p,
+                    likes: isLiked 
+                        ? currentLikes.filter(u => u !== currentUser.username) 
+                        : [...currentLikes, currentUser.username]
+                };
+            }
+            return p;
+        }));
+
+        // Gửi lệnh lên Firebase
+        await forumService.toggleLike(postId, currentUser.username);
+    };
+
+    // 4. Sửa hàm Comment (Cập nhật UI trước, gọi API sau)
+    const handleComment = async (postId: string) => {
+        if (!commentText.trim()) return;
+        
+        const newCommentObj: ForumComment = {
+            id: Date.now().toString(),
+            author: currentUser.username,
+            authorAvatar: currentUser.avatar || '',
+            content: commentText,
+            createdAt: new Date().toISOString()
+        };
+
+        // Clear ô input và cập nhật UI ngay lập tức
+        setCommentText('');
+        setPosts(prevPosts => prevPosts.map(p => {
+            if (p.id === postId) {
+                return { ...p, comments: [...(p.comments || []), newCommentObj] };
+            }
+            return p;
+        }));
+
+        // Gửi bình luận lên Firebase
+        await forumService.addComment(postId, newCommentObj);
+    };
+
     return (
         <div className="max-w-4xl mx-auto h-[calc(100vh-100px)] flex flex-col">
             <header className="flex flex-col gap-4 mb-6">
@@ -165,9 +184,7 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                             <h3 className="font-bold text-gray-900 dark:text-white text-sm">{post.author}</h3>
                                             <CheckCircle2 className="w-3 h-3 text-blue-500" title="Thành viên đã xác thực" />
                                         </div>
-                                        <span className="text-xs text-gray-500">
-                                            {post.timestamp ? new Date(post.timestamp.seconds * 1000).toLocaleDateString('vi-VN') : 'Vừa xong'}
-                                        </span>
+                                        <span className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
                                 </div>
                                 
@@ -182,7 +199,7 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                 </p>
 
                                 <div className="flex flex-wrap gap-2 mb-4">
-                                    {post.tags && post.tags.map((tag: string) => (
+                                    {post.tags.map(tag => (
                                         <button 
                                             key={tag} 
                                             onClick={(e) => { e.stopPropagation(); setSelectedTag(tag); }}
@@ -200,17 +217,17 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                 <div className="flex items-center gap-6 border-t border-gray-100 dark:border-gray-700 pt-4">
                                     <button 
                                         onClick={() => handleLike(post.id)}
-                                        className={`flex items-center gap-2 text-sm font-medium transition-colors ${post.likes && post.likes.includes(currentUser.name) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'}`}
+                                        className={`flex items-center gap-2 text-sm font-medium transition-colors ${(post.likes || []).includes(currentUser.username) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'}`}
                                     >
-                                        <Heart className={`w-5 h-5 ${post.likes && post.likes.includes(currentUser.name) ? 'fill-current' : ''}`} />
-                                        {post.likes ? post.likes.length : 0}
+                                        <Heart className={`w-5 h-5 ${(post.likes || []).includes(currentUser.username) ? 'fill-current' : ''}`} />
+                                        {(post.likes || []).length}
                                     </button>
                                     <button 
                                         onClick={() => setExpandedPostId(expandedPostId === post.id ? null : post.id)}
                                         className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
                                     >
                                         <MessageSquare className="w-5 h-5" />
-                                        {post.comments ? post.comments.length : 0} Bình luận
+                                        {post.comments?.length || 0} Bình luận
                                     </button>
                                 </div>
                             </div>
@@ -222,13 +239,16 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                         {(!post.comments || post.comments.length === 0) && (
                                             <p className="text-center text-gray-400 text-sm italic">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
                                         )}
-                                        {post.comments && post.comments.map((comment: any, index: number) => (
-                                            <div key={index} className="flex gap-3">
+                                        {(post.comments || []).map(comment => (
+                                            <div key={comment.id} className="flex gap-3">
                                                 <img src={comment.authorAvatar || `https://ui-avatars.com/api/?name=${comment.author}`} className="w-8 h-8 rounded-full border border-gray-200" alt="avt" />
                                                 <div className="flex-1 bg-white dark:bg-[#1e1e2d] p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                                                     <div className="flex justify-between items-center mb-1">
-                                                        <span className="font-bold text-xs dark:text-white">{comment.author}</span>
-                                                        <span className="text-[10px] text-gray-400">{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="font-bold text-xs dark:text-white">{comment.author}</span>
+                                                            <CheckCircle2 className="w-3 h-3 text-blue-500" title="Thành viên đã xác thực" />
+                                                        </div>
+                                                        <span className="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
                                                     </div>
                                                     <p className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</p>
                                                 </div>
@@ -300,4 +320,3 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
         </div>
     );
 };
-export default CommunityForum;

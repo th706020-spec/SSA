@@ -6,14 +6,22 @@ export enum ViewState {
     PROJECTS = 'PROJECTS',
     SSR_PROFILE = 'SSR_PROFILE',
     NOTES = 'NOTES',
+    SETTINGS = 'SETTINGS',
     FORUM = 'FORUM',
-    USER_DIRECTORY = 'USER_DIRECTORY', // New view
-    SETTINGS = 'SETTINGS'
+    TRENDS = 'TRENDS',
+    FEEDBACK = 'FEEDBACK'
+}
+
+export interface Feedback {
+    id: string;
+    user: string;
+    type: 'bug' | 'feature' | 'other';
+    content: string;
+    createdAt: string;
 }
 
 // User Interface
 export interface User {
-    id: string;
     username: string;
     password?: string;
     avatar?: string; // New: Avatar URL
@@ -30,41 +38,15 @@ export interface User {
 }
 
 // Interfaces for Notes
-// Interfaces for Notes
 export interface Note {
     id: string;
     title: string;
     content: string; // HTML or Text
-    type: 'text' | 'checklist'; // Dạng văn bản hoặc danh sách
-    items?: { text: string; done: boolean }[]; // Các mục trong checklist
-    media?: string[]; // Mảng chứa link ảnh
+    type: 'text' | 'checklist';
+    items?: { text: string; done: boolean }[]; // For checklists
+    media?: string[]; // Array of image URLs
     updatedAt: string;
-    color?: string; // Màu nền note
-    
-    // --- CÁC DÒNG MỚI CẦN THÊM ---
-    tags?: string[];      // <--- Thêm dòng này để hết lỗi 'tags'
-    createdAt: string;    // <--- Thêm dòng này để tránh lỗi ngày tạo
-}
-
-// Interfaces for Forum
-export interface ForumPost {
-    id: string;
-    author: string;
-    authorAvatar?: string;
-    title: string;
-    content: string;
-    likes: string[]; // Array of usernames who liked
-    comments: ForumComment[];
-    createdAt: string;
-    tags: string[];
-}
-
-export interface ForumComment {
-    id: string;
-    author: string;
-    authorAvatar?: string;
-    content: string;
-    createdAt: string;
+    color?: string; // For sticky note effect
 }
 
 // Interfaces for Schedule
@@ -74,6 +56,7 @@ export interface Task {
     date: string; // YYYY-MM-DD
     startTime: string; // HH:mm
     duration: number; // minutes
+    actualDuration?: number; // minutes spent
     category: 'study' | 'project' | 'break' | 'review';
     completed: boolean;
     description?: string;
@@ -161,4 +144,25 @@ export interface AiResponse<T> {
     success: boolean;
     data?: T;
     error?: string;
+}
+
+// Interfaces for Forum
+export interface ForumComment {
+    id: string;
+    author: string;
+    authorAvatar?: string;
+    content: string;
+    createdAt: string;
+}
+
+export interface ForumPost {
+    id: string;
+    author: string;
+    authorAvatar?: string;
+    title: string;
+    content: string;
+    tags: string[];
+    likes: string[];
+    comments: ForumComment[];
+    createdAt: string;
 }

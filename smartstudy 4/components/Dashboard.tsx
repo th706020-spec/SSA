@@ -18,7 +18,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
     
     // Calculate hours
     const expectedMinutes = tasks.reduce((acc, t) => acc + t.duration, 0);
-    const actualMinutes = completedTasksList.reduce((acc, t) => acc + t.duration, 0);
+    const actualMinutes = tasks.reduce((acc, t) => {
+        if (t.actualDuration) return acc + t.actualDuration;
+        if (t.completed) return acc + t.duration;
+        return acc;
+    }, 0);
 
     const formatHours = (mins: number) => {
         const h = Math.floor(mins / 60);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewState } from '../types';
-import { LayoutDashboard, Calendar, Target, GraduationCap, UserCircle, Timer, Moon, Sun, StickyNote, Users, Settings, MessageSquare, BookUser } from 'lucide-react';
+import { LayoutDashboard, Calendar, Target, GraduationCap, UserCircle, Timer, Moon, Sun, StickyNote, Settings, MessageSquare, TrendingUp, Flag } from 'lucide-react';
 
 interface SidebarProps {
     currentView: ViewState;
@@ -16,8 +16,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isD
         { id: ViewState.SCHEDULE, label: 'Lịch học tập', icon: Calendar },
         { id: ViewState.PROJECTS, label: 'Dự án tự học', icon: Target },
         { id: ViewState.NOTES, label: 'Ghi chú thông minh', icon: StickyNote }, 
-        { id: ViewState.FORUM, label: 'Cộng đồng', icon: MessageSquare }, // Changed icon
-        { id: ViewState.USER_DIRECTORY, label: 'Thành viên', icon: Users }, // New Item
+        { id: ViewState.FORUM, label: 'Diễn đàn', icon: MessageSquare },
+        { id: ViewState.TRENDS, label: 'Xu hướng người dùng', icon: TrendingUp },
+        { id: ViewState.FEEDBACK, label: 'Góp ý quản trị viên', icon: Flag },
         { id: ViewState.SSR_PROFILE, label: 'Hồ sơ SSR', icon: UserCircle },
     ];
 

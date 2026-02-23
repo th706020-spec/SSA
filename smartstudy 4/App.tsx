@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// Import các component giao diện
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ScheduleManager } from './components/ScheduleManager';
@@ -8,140 +7,177 @@ import { OnboardingSSR } from './components/OnboardingSSR';
 import { SSRProfile } from './components/SSRProfile';
 import { PomodoroTimer } from './components/PomodoroTimer';
 import { SmartNotes } from './components/SmartNotes';
-import { CommunityForum } from './components/CommunityForum';
-import { UserDirectory } from './components/UserDirectory';
 import { UserProfile } from './components/UserProfile';
+import { CommunityForum } from './components/CommunityForum';
+import { AppTrends } from './components/AppTrends';
+import { AdminFeedback } from './components/AdminFeedback';
 import { Auth } from './components/Auth';
-
-// Import Types và Icons
+import { authService } from './services/authService';
 import { ViewState, Task, Project, User, Note } from './types';
 import { Menu, LogOut } from 'lucide-react';
 import { generateSmartSchedule } from './services/geminiService';
 
-// --- GỌI FIREBASE AUTH & FIRESTORE (DATABASE) ---
-import { auth, db } from './firebaseConfig'; // Thêm db
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; // Các hàm đọc/ghi dữ liệu
+export type PomodoroMode = 'focus' | 'shortBreak' | 'longBreak';
+
+export interface PomodoroState {
+    mode: PomodoroMode;
+    timeLeft: number;
+    isActive: boolean;
+    selectedTaskId: string;
+    endTime: number | null;
+    autoSync: boolean;
+}
 
 const App: React.FC = () => {
+    // Theme State
     const [isDarkMode, setIsDarkMode] = useState(false);
+
+    // Auth & Data State
     const [user, setUser] = useState<User | null>(null);
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.DASHBOARD);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
 
+    // Pomodoro State
+    const [pomodoroState, setPomodoroState] = useState<PomodoroState>({
+        mode: 'focus',
+        timeLeft: 25 * 60,
+        isActive: false,
+        selectedTaskId: '',
+        endTime: null,
+        autoSync: true
+    });
+
+    // Helper to sanitize user data (ensure new fields exist)
     const sanitizeUser = (rawUser: User): User => {
         const u = { ...rawUser };
-        if (!u.data) {
-             u.data = { tasks: [], projects: [], notes: [], profile: null };
-        }
         if (!u.data.notes) u.data.notes = [];
         if (!u.settings) u.settings = { notifications: true, soundEnabled: true };
         return u;
     };
 
-    // --- 1. LOGIC ĐĂNG NHẬP & TẢI DỮ LIỆU TỪ DATABASE ---
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                // Bước 1: Lấy thông tin cơ bản
-                let finalUserData: User = {
-                    id: firebaseUser.uid,
-                    username: firebaseUser.displayName || "Người dùng",
-                    avatar: firebaseUser.photoURL || "",
-                    data: { tasks: [], projects: [], notes: [], profile: null },
-                    settings: { notifications: true, soundEnabled: true }
-                };
-
-                // Bước 2: Lên Database tìm xem ông này đã lưu dữ liệu bao giờ chưa
-                try {
-                    const userDocRef = doc(db, "users", firebaseUser.uid);
-                    const userSnap = await getDoc(userDocRef);
-
-                    if (userSnap.exists()) {
-                        // Nếu tìm thấy -> Lấy dữ liệu cũ đắp vào
-                        const savedData = userSnap.data();
-                        if (savedData.data) {
-                            finalUserData.data = savedData.data;
-                        }
-                    } else {
-                        // Nếu chưa có (User mới tinh) -> Tạo một bản ghi rỗng trên Database
-                        await setDoc(userDocRef, { 
-                            username: finalUserData.username,
-                            data: finalUserData.data 
-                        });
-                    }
-                } catch (error) {
-                    console.error("Lỗi khi tải dữ liệu:", error);
-                }
-
-                setUser(sanitizeUser(finalUserData));
-            } else {
-                setUser(null);
-            }
-            setIsLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, []);
-
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-            setUser(null);
-        } catch (error) {
-            console.error("Lỗi đăng xuất:", error);
-        }
+    const handleLogin = (loggedInUser: User) => {
+        const sanitized = sanitizeUser(loggedInUser);
+        setUser(sanitized);
     };
 
-    // --- 2. CÁC HÀM CẬP NHẬT DỮ LIỆU (Cần Lưu Lên Database) ---
-    
-    // Hàm phụ để lưu nhanh lên Firebase
-    const saveToFirebase = async (userId: string, newData: any) => {
-        try {
-            const userRef = doc(db, "users", userId);
-            await updateDoc(userRef, { data: newData });
-        } catch (error) {
-            console.error("Lỗi lưu dữ liệu:", error);
+    // Initialize from LocalStorage (Auto Login)
+    useEffect(() => {
+        const savedUser = authService.getCurrentUser();
+        if (savedUser) {
+            handleLogin(savedUser);
+        } else {
+            // Only confirm logout if no user is found
+            authService.logout();
+            setUser(null);
         }
+    }, []);
+
+    const handleLogout = () => {
+        authService.logout();
+        setUser(null);
     };
 
     const handleTasksUpdate = (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
         if (!user) return;
+        
         let updatedTasks: Task[];
         if (typeof newTasks === 'function') {
             updatedTasks = newTasks(user.data.tasks);
         } else {
             updatedTasks = newTasks;
         }
-        
-        const newData = { ...user.data, tasks: updatedTasks };
-        const updatedUser = { ...user, data: newData };
-        
-        setUser(updatedUser); // Cập nhật màn hình ngay
-        saveToFirebase(user.id, newData); // Lưu ngầm lên Database
+
+        const updatedUser = { ...user, data: { ...user.data, tasks: updatedTasks } };
+        setUser(updatedUser);
+        authService.updateUserData(updatedTasks);
     };
 
     const handleProjectsUpdate = (newProjects: Project[]) => {
-        if (!user) return;
-        const newData = { ...user.data, projects: newProjects };
-        setUser({ ...user, data: newData });
-        saveToFirebase(user.id, newData);
+         if (!user) return;
+        const updatedUser = { ...user, data: { ...user.data, projects: newProjects } };
+        setUser(updatedUser);
+        authService.updateUserData(undefined, newProjects);
     };
 
     const handleNotesUpdate = (newNotes: Note[]) => {
         if (!user) return;
-        const newData = { ...user.data, notes: newNotes };
-        setUser({ ...user, data: newData });
-        saveToFirebase(user.id, newData);
+        const updatedUser = { ...user, data: { ...user.data, notes: newNotes } };
+        setUser(updatedUser);
+        authService.updateUserData(undefined, undefined, undefined, newNotes);
     }
 
     const handleUserUpdate = (updatedUser: User) => {
         setUser(updatedUser);
-        // Lưu setting nếu cần (chưa implement)
+        // Persistence handled inside UserProfile component via authService but state needs update
     };
 
-    // --- 3. QUAN TRỌNG: LƯU KẾT QUẢ KHẢO SÁT ---
+    // Pomodoro Timer Logic
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval> | null = null;
+        if (pomodoroState.isActive && pomodoroState.endTime) {
+            interval = setInterval(() => {
+                const now = Date.now();
+                const secondsLeft = Math.ceil((pomodoroState.endTime! - now) / 1000);
+                if (secondsLeft <= 0) {
+                    handleTimerComplete();
+                    if (interval) clearInterval(interval);
+                } else {
+                    setPomodoroState(prev => ({ ...prev, timeLeft: secondsLeft }));
+                }
+            }, 200);
+        }
+        return () => { if (interval) clearInterval(interval); };
+    }, [pomodoroState.isActive, pomodoroState.endTime, user]); // Added user to deps
+
+    const handleTimerComplete = () => {
+        // Play sound if possible (browsers might block it without user interaction)
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
+            gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.5);
+        } catch (e) {
+            console.error("Audio play failed", e);
+        }
+
+        setPomodoroState(prev => {
+            const isFocus = prev.mode === 'focus';
+            const newMode = isFocus ? 'shortBreak' : 'focus';
+            const newTimeLeft = (newMode === 'focus' ? 25 : 5) * 60;
+            const newEndTime = Date.now() + newTimeLeft * 1000;
+
+            // Update task actualDuration if it was a focus session
+            if (isFocus && prev.selectedTaskId && user) {
+                const isTask = user.data.tasks.some(t => t.id === prev.selectedTaskId);
+                if (isTask) {
+                    const updatedTasks = user.data.tasks.map(t => {
+                        if (t.id === prev.selectedTaskId) {
+                            return { ...t, actualDuration: (t.actualDuration || 0) + 25 };
+                        }
+                        return t;
+                    });
+                    setTimeout(() => handleTasksUpdate(updatedTasks), 0);
+                }
+            }
+
+            return {
+                ...prev,
+                mode: newMode,
+                timeLeft: newTimeLeft,
+                endTime: newEndTime,
+                isActive: true // Auto loop
+            };
+        });
+    };
+
     const handleSurveyComplete = async (phoneSurvey: any, sleepSurvey: any, analysis: any) => {
         if (!user) return;
 
@@ -168,33 +204,28 @@ const App: React.FC = () => {
             analysis
         };
 
-        const newData = { 
-            ...user.data, 
-            profile: updatedProfile,
-            tasks: initialTasks 
+        const updatedUser = { 
+            ...user, 
+            data: { 
+                ...user.data, 
+                profile: updatedProfile,
+                tasks: initialTasks 
+            } 
         };
-
-        // Cập nhật State
-        setUser({ ...user, data: newData });
-
-        // LƯU NGAY LẬP TỨC VÀO FIREBASE
-        await saveToFirebase(user.id, newData);
+        setUser(updatedUser);
+        authService.updateUserData(initialTasks, undefined, updatedProfile);
     };
 
     const toggleTheme = () => {
         setIsDarkMode(!isDarkMode);
     };
 
-    // --- RENDER GIAO DIỆN ---
-    if (isLoading) {
-        return <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-[#151521] text-gray-500">Đang tải dữ liệu...</div>;
-    }
-
+    // 1. Not Logged In -> Show Auth
     if (!user) {
-        return <Auth onLogin={() => {}} />;
+        return <Auth onLogin={handleLogin} />;
     }
 
-    // Kiểm tra xem đã có Profile trong Database chưa
+    // 2. Logged In but No Profile -> Show Onboarding
     if (!user.data.profile) {
         return (
             <OnboardingSSR 
@@ -203,28 +234,37 @@ const App: React.FC = () => {
         );
     }
 
+    // 3. Main App
     const renderView = () => {
         switch (currentView) {
             case ViewState.DASHBOARD:
-                return <Dashboard tasks={user!.data.tasks} projects={user!.data.projects} />;
+                return <Dashboard tasks={user.data.tasks} projects={user.data.projects} />;
             case ViewState.SSR_PROFILE:
-                return user!.data.profile ? <SSRProfile profile={user!.data.profile} /> : null;
+                return user.data.profile ? <SSRProfile profile={user.data.profile} /> : null;
             case ViewState.SCHEDULE:
-                return <ScheduleManager tasks={user!.data.tasks} setTasks={handleTasksUpdate} />;
+                return <ScheduleManager tasks={user.data.tasks} setTasks={handleTasksUpdate} />;
             case ViewState.POMODORO:
-                return <PomodoroTimer tasks={user!.data.tasks} />;
+                return <PomodoroTimer 
+                    tasks={user.data.tasks} 
+                    projects={user.data.projects}
+                    pomodoroState={pomodoroState}
+                    setPomodoroState={setPomodoroState}
+                />;
             case ViewState.PROJECTS:
-                return <ProjectTracker projects={user!.data.projects} setProjects={handleProjectsUpdate} />;
+                return <ProjectTracker projects={user.data.projects} setProjects={handleProjectsUpdate} />;
             case ViewState.NOTES:
-                return <SmartNotes notes={user!.data.notes || []} setNotes={handleNotesUpdate} />;
+                // 👇 ĐÃ SỬA DÒNG NÀY ĐỂ TRUYỀN USER VÀO SMARTNOTES 👇
+                return <SmartNotes currentUser={user} />;
             case ViewState.FORUM:
-                return <CommunityForum currentUser={user!} />;
-            case ViewState.USER_DIRECTORY:
-                return <UserDirectory />;
+                return <CommunityForum currentUser={user} />;
+            case ViewState.TRENDS:
+                return <AppTrends />;
+            case ViewState.FEEDBACK:
+                return <AdminFeedback currentUser={user} />;
             case ViewState.SETTINGS:
-                return <UserProfile user={user!} onUpdate={handleUserUpdate} onLogout={handleLogout} />;
+                return <UserProfile user={user} onUpdate={handleUserUpdate} onLogout={handleLogout} />;
             default:
-                return <Dashboard tasks={user!.data.tasks} projects={user!.data.projects} />;
+                return <Dashboard tasks={user.data.tasks} projects={user.data.projects} />;
         }
     };
 

@@ -1,83 +1,68 @@
 import { ForumPost, ForumComment } from '../types';
-
-const FORUM_KEY = 'smartstudy_forum_posts';
-
-// Dummy initial data - User posts only
-const INITIAL_POSTS: ForumPost[] = [
-    {
-        id: 'post-2',
-        author: 'hacker_lor',
-        authorAvatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=hacker',
-        title: 'Làm sao để tập trung khi học Coding?',
-        content: 'Mình thường xuyên bị xao nhãng bởi Facebook khi đang code. Có ai dùng phương pháp Pomodoro kết hợp với chặn web không? Cho mình xin review với.',
-        likes: [],
-        tags: ['Hỏi đáp', 'Kỹ năng mềm'],
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        comments: [
-            {
-                id: 'c-1',
-                author: 'study_mate',
-                authorAvatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=study',
-                content: 'Mình đang dùng extension Forest, khá hiệu quả đó bạn.',
-                createdAt: new Date().toISOString()
-            }
-        ]
-    },
-    {
-        id: 'post-3',
-        author: 'design_pro',
-        authorAvatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=design',
-        title: 'Chia sẻ tài liệu học UX/UI cơ bản',
-        content: 'Chào mọi người, mình mới tìm được bộ tài liệu Google UX Design Certificate miễn phí. Ai cần thì comment email mình gửi nhé!',
-        likes: ['user1', 'hacker_lor'],
-        tags: ['Chia sẻ', 'Tài liệu'],
-        createdAt: new Date(Date.now() - 7200000).toISOString(),
-        comments: []
-    }
-];
+import { db } from '../firebaseConfig'; 
+import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, arrayRemove, query, orderBy, getDoc } from 'firebase/firestore';
 
 export const forumService = {
-    getPosts: (): ForumPost[] => {
-        const data = localStorage.getItem(FORUM_KEY);
-        if (!data) {
-            localStorage.setItem(FORUM_KEY, JSON.stringify(INITIAL_POSTS));
-            return INITIAL_POSTS;
+    // 1. Lấy danh sách bài đăng từ Firebase
+    getPosts: async (): Promise<ForumPost[]> => {
+        try {
+            // Sắp xếp bài đăng theo thời gian mới nhất
+            const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            
+            const posts: ForumPost[] = [];
+            querySnapshot.forEach((document) => {
+                posts.push({ id: document.id, ...document.data() } as ForumPost);
+            });
+            return posts;
+        } catch (error) {
+            console.error("Lỗi tải bài đăng từ Firebase:", error);
+            return [];
         }
-        return JSON.parse(data);
     },
 
-    createPost: (post: ForumPost) => {
-        const posts = forumService.getPosts();
-        const newPosts = [post, ...posts];
-        localStorage.setItem(FORUM_KEY, JSON.stringify(newPosts));
-        return newPosts;
+    // 2. Tạo bài đăng mới lên Firebase
+    createPost: async (post: ForumPost) => {
+        try {
+            // Loại bỏ id tạm thời vì Firebase sẽ tự sinh ra ID chuẩn
+            const { id, ...postData } = post; 
+            const docRef = await addDoc(collection(db, 'posts'), postData);
+            return { ...post, id: docRef.id };
+        } catch (error) {
+            console.error("Lỗi tạo bài đăng:", error);
+            return post;
+        }
     },
 
-    addComment: (postId: string, comment: ForumComment) => {
-        const posts = forumService.getPosts();
-        const updatedPosts = posts.map(p => {
-            if (p.id === postId) {
-                return { ...p, comments: [...p.comments, comment] };
+    // 3. Thêm bình luận vào Firebase
+    addComment: async (postId: string, comment: ForumComment) => {
+        try {
+            const postRef = doc(db, 'posts', postId);
+            await updateDoc(postRef, {
+                comments: arrayUnion(comment) // Hàm arrayUnion tự động đẩy data vào mảng
+            });
+        } catch (error) {
+            console.error("Lỗi thêm bình luận:", error);
+        }
+    },
+
+    // 4. Thả tim (Like) trên Firebase
+    toggleLike: async (postId: string, username: string) => {
+        try {
+            const postRef = doc(db, 'posts', postId);
+            const postSnap = await getDoc(postRef);
+            
+            if (postSnap.exists()) {
+                const currentLikes = postSnap.data().likes || [];
+                // Kiểm tra xem đã like chưa để thêm hoặc bỏ like
+                if (currentLikes.includes(username)) {
+                    await updateDoc(postRef, { likes: arrayRemove(username) });
+                } else {
+                    await updateDoc(postRef, { likes: arrayUnion(username) });
+                }
             }
-            return p;
-        });
-        localStorage.setItem(FORUM_KEY, JSON.stringify(updatedPosts));
-        return updatedPosts;
-    },
-
-    toggleLike: (postId: string, username: string) => {
-        const posts = forumService.getPosts();
-        const updatedPosts = posts.map(p => {
-            if (p.id === postId) {
-                const hasLiked = p.likes.includes(username);
-                const newLikes = hasLiked 
-                    ? p.likes.filter(u => u !== username) 
-                    : [...p.likes, username];
-                return { ...p, likes: newLikes };
-            }
-            return p;
-        });
-        localStorage.setItem(FORUM_KEY, JSON.stringify(updatedPosts));
-        return updatedPosts;
+        } catch (error) {
+            console.error("Lỗi thả tim:", error);
+        }
     }
 };

@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Coffee, Brain, Armchair, ChevronDown, ListTodo, Zap } from 'lucide-react';
-import { Task } from '../types';
+import { Task, Project } from '../types';
+import { PomodoroState, PomodoroMode } from '../App';
 
 interface PomodoroTimerProps {
     tasks: Task[];
+    projects: Project[];
+    pomodoroState: PomodoroState;
+    setPomodoroState: React.Dispatch<React.SetStateAction<PomodoroState>>;
 }
 
-type Mode = 'focus' | 'shortBreak' | 'longBreak';
-
-const MODES: Record<Mode, { label: string; minutes: number; colorFrom: string; colorTo: string; icon: any; glow: string }> = {
+const MODES: Record<PomodoroMode, { label: string; minutes: number; colorFrom: string; colorTo: string; icon: any; glow: string }> = {
     focus: { 
         label: 'Tập trung', 
         minutes: 25, 
@@ -35,13 +37,8 @@ const MODES: Record<Mode, { label: string; minutes: number; colorFrom: string; c
     },
 };
 
-export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks }) => {
-    const [mode, setMode] = useState<Mode>('focus');
-    const [timeLeft, setTimeLeft] = useState(MODES.focus.minutes * 60);
-    const [isActive, setIsActive] = useState(false);
-    const [selectedTaskId, setSelectedTaskId] = useState<string>('');
-    const [endTime, setEndTime] = useState<number | null>(null);
-    const [autoSync, setAutoSync] = useState(true); // New state for auto-sync status
+export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, projects, pomodoroState, setPomodoroState }) => {
+    const { mode, timeLeft, isActive, selectedTaskId, autoSync } = pomodoroState;
 
     // Helper to get local date YYYY-MM-DD
     const getTodayString = () => {
@@ -73,7 +70,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks }) => {
             });
 
             if (currentTask && currentTask.id !== selectedTaskId) {
-                setSelectedTaskId(currentTask.id);
+                setPomodoroState(prev => ({ ...prev, selectedTaskId: currentTask.id }));
                 // Automatically switch mode based on task category
                 if (currentTask.category === 'break') {
                     if (currentTask.duration >= 15) changeMode('longBreak');
@@ -87,90 +84,50 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks }) => {
         syncWithSchedule(); // Run immediately
         const interval = setInterval(syncWithSchedule, 60000); // Check every minute
         return () => clearInterval(interval);
-    }, [todayTasks, autoSync, selectedTaskId]);
-
-    const playNotificationSound = () => {
-        try {
-            if (!audioContextRef.current) {
-                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-            }
-            const ctx = audioContextRef.current;
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
-            
-            gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-
-            oscillator.start(ctx.currentTime);
-            oscillator.stop(ctx.currentTime + 0.5);
-        } catch (e) {
-            console.error("Audio play failed", e);
-        }
-    };
-
-    useEffect(() => {
-        let interval: ReturnType<typeof setInterval> | null = null;
-        if (isActive && endTime) {
-            interval = setInterval(() => {
-                const now = Date.now();
-                const secondsLeft = Math.ceil((endTime - now) / 1000);
-                if (secondsLeft <= 0) {
-                    setTimeLeft(0);
-                    setIsActive(false);
-                    setEndTime(null);
-                    handleTimerComplete();
-                    if (interval) clearInterval(interval);
-                } else {
-                    setTimeLeft(secondsLeft);
-                }
-            }, 200);
-        }
-        return () => { if (interval) clearInterval(interval); };
-    }, [isActive, endTime]);
-
-    const handleTimerComplete = () => {
-        playNotificationSound();
-        if (mode === 'focus') changeMode('shortBreak');
-        else changeMode('focus');
-    };
+    }, [todayTasks, autoSync, selectedTaskId, setPomodoroState]);
 
     const toggleTimer = () => {
         if (!isActive) {
             const now = Date.now();
-            setEndTime(now + timeLeft * 1000);
-            setIsActive(true);
+            setPomodoroState(prev => ({
+                ...prev,
+                endTime: now + prev.timeLeft * 1000,
+                isActive: true
+            }));
             if (!audioContextRef.current) {
                 audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             }
         } else {
-            setEndTime(null);
-            setIsActive(false);
+            setPomodoroState(prev => ({
+                ...prev,
+                endTime: null,
+                isActive: false
+            }));
         }
     };
 
     const resetTimer = () => {
-        setIsActive(false);
-        setEndTime(null);
-        setTimeLeft(MODES[mode].minutes * 60);
+        setPomodoroState(prev => ({
+            ...prev,
+            isActive: false,
+            endTime: null,
+            timeLeft: MODES[prev.mode].minutes * 60
+        }));
     };
 
-    const changeMode = (newMode: Mode) => {
-        setMode(newMode);
-        setIsActive(false);
-        setEndTime(null);
-        setTimeLeft(MODES[newMode].minutes * 60);
+    const changeMode = (newMode: PomodoroMode) => {
+        setPomodoroState(prev => ({
+            ...prev,
+            mode: newMode,
+            isActive: false,
+            endTime: null,
+            timeLeft: MODES[newMode].minutes * 60
+        }));
     };
 
     const handleTaskSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const tId = e.target.value;
-        setSelectedTaskId(tId);
+        setPomodoroState(prev => ({ ...prev, selectedTaskId: tId, autoSync: false }));
         // Manual selection disables auto-sync temporarily to allow user control
         if (tId) {
              const task = tasks.find(t => t.id === tId);
@@ -181,6 +138,9 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks }) => {
                 } else {
                     changeMode('focus');
                 }
+             } else {
+                 // It might be a project
+                 changeMode('focus');
              }
         }
     };
@@ -310,19 +270,32 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks }) => {
                                 hover:bg-gray-50 dark:hover:bg-[#32324a]"
                         >
                             <option value="" className="bg-white text-gray-900 dark:bg-[#1e1e2d] dark:text-white">
-                                {todayTasks.length === 0 ? '-- Hôm nay chưa có lịch --' : '-- Chọn công việc hôm nay --'}
+                                {todayTasks.length === 0 && projects.length === 0 ? '-- Hôm nay chưa có lịch --' : '-- Chọn công việc / dự án --'}
                             </option>
-                            {todayTasks.map(t => (
-                                <option key={t.id} value={t.id} className="bg-white text-gray-900 dark:bg-[#1e1e2d] dark:text-white">
-                                    {t.category === 'break' ? '☕' : '📚'} {t.startTime} - {t.title}
-                                </option>
-                            ))}
+                            {todayTasks.length > 0 && (
+                                <optgroup label="Lịch học hôm nay" className="bg-white text-gray-900 dark:bg-[#1e1e2d] dark:text-white font-bold">
+                                    {todayTasks.map(t => (
+                                        <option key={t.id} value={t.id} className="font-normal">
+                                            {t.category === 'break' ? '☕' : '📚'} {t.startTime} - {t.title}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
+                            {projects.length > 0 && (
+                                <optgroup label="Dự án học tập" className="bg-white text-gray-900 dark:bg-[#1e1e2d] dark:text-white font-bold">
+                                    {projects.map(p => (
+                                        <option key={p.id} value={p.id} className="font-normal">
+                                            🎯 {p.name}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
                         </select>
                         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none z-20">
                             <ChevronDown className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                         </div>
                     </div>
-                    {todayTasks.length === 0 && (
+                    {todayTasks.length === 0 && projects.length === 0 && (
                         <p className="text-center text-xs text-orange-500 mt-2">
                             Bạn chưa tạo lịch cho ngày hôm nay ({todayStr}). Hãy vào phần "Lịch học tập" để thêm.
                         </p>

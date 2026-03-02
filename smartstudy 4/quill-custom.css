@@ -1,0 +1,11 @@
+/* Làm hiện các nút bấm trên thanh công cụ */
+.ql-toolbar.ql-snow {
+  border: 1px solid #e5e7eb !important;
+  background-color: white !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+.ql-container.ql-snow {
+  border: 1px solid #e5e7eb !important;
+  border-radius: 0 0 8px 8px !important;
+  min-height: 300px;
+}

@@ -6,6 +6,7 @@ import { ProjectTracker } from './components/ProjectTracker';
 import { OnboardingSSR } from './components/OnboardingSSR';
 import { SSRProfile } from './components/SSRProfile';
 import { PomodoroTimer } from './components/PomodoroTimer';
+import { SmartNotes } from './components/SmartNotes';
 import { UserProfile } from './components/UserProfile';
 import { CommunityForum } from './components/CommunityForum';
 import { AppTrends } from './components/AppTrends';
@@ -251,6 +252,9 @@ const App: React.FC = () => {
                 />;
             case ViewState.PROJECTS:
                 return <ProjectTracker projects={user.data.projects} setProjects={handleProjectsUpdate} />;
+            case ViewState.NOTES:
+                // 👇 ĐÃ SỬA DÒNG NÀY ĐỂ TRUYỀN USER VÀO SMARTNOTES 👇
+                return <SmartNotes currentUser={user} />;
             case ViewState.FORUM:
                 return <CommunityForum currentUser={user} />;
             case ViewState.TRENDS:

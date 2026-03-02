@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Note, User } from '../types';
-import { Plus, Search, Trash2, Image as ImageIcon, Mic, CheckSquare, Type, LayoutGrid, X, PenLine } from 'lucide-react';
+import { Plus, Search, Trash2, CheckSquare, Type, LayoutGrid, X, PenLine } from 'lucide-react';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
 
+// Tích hợp trình soạn thảo chuyên nghiệp
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import 'katex/dist/katex.min.css';
+import '../quill-custom.css';
+// @ts-ignore
+import katex from 'katex';
+
+// Cấu hình LaTeX toàn cục
+(window as any).katex = katex;
+
 interface SmartNotesProps {
-    currentUser: User; // Nhận thông tin user để lưu theo tài khoản
+    currentUser: User;
 }
 
 const QUOTES = [
@@ -21,11 +32,20 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isAutoSaving, setIsAutoSaving] = useState(false);
 
-    // 1. Tải ghi chú từ Firebase khi mới vào trang
+    // Cấu hình thanh công cụ đầy đủ như Word + LaTeX
+    const quillModules = {
+        toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ 'color': [] }, { 'background': [] }], // Đổi màu chữ & Highlight
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            ['formula', 'link', 'clean'], // Nút gõ LaTeX (biểu tượng Pi hoặc Sigma)
+        ],
+    };
+
     useEffect(() => {
         const fetchNotes = async () => {
             try {
-                // Chỉ lấy ghi chú của user đang đăng nhập
                 const q = query(
                     collection(db, 'notes'), 
                     where("authorId", "==", currentUser.username),
@@ -44,7 +64,6 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         fetchNotes();
     }, [currentUser.username]);
 
-    // 2. Logic Auto-save lên Firebase (Tự động lưu sau 1 giây)
     useEffect(() => {
         if (!selectedNote || !selectedNote.id) return;
 
@@ -52,14 +71,12 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         const timer = setTimeout(async () => {
             try {
                 const noteRef = doc(db, 'notes', selectedNote.id);
-                // Tạo một bản copy không chứa id để lưu lên db
                 const { id, ...dataToSave } = selectedNote; 
                 await updateDoc(noteRef, {
                     ...dataToSave,
                     updatedAt: new Date().toISOString()
                 });
                 
-                // Cập nhật lại UI
                 setNotes(prev => prev.map(n => n.id === selectedNote.id ? selectedNote : n));
                 setIsAutoSaving(false);
             } catch (error) {
@@ -71,7 +88,6 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         return () => clearTimeout(timer);
     }, [selectedNote]);
 
-    // 3. Tạo ghi chú mới
     const handleCreateNote = async (type: 'text' | 'checklist') => {
         const newNoteData = {
             title: '',
@@ -80,14 +96,11 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
             items: type === 'checklist' ? [] : null,
             updatedAt: new Date().toISOString(),
             color: 'bg-white dark:bg-[#27273a]',
-            authorId: currentUser.username // Đánh dấu ghi chú thuộc về ai
+            authorId: currentUser.username
         };
 
         try {
-            // Lưu lên Firebase trước
             const docRef = await addDoc(collection(db, 'notes'), newNoteData);
-            
-            // Lấy ID trả về ghép vào object để hiện lên web
             const newNote: Note = { id: docRef.id, ...newNoteData } as Note;
             setNotes(prev => [newNote, ...prev]);
             setSelectedNote(newNote);
@@ -96,8 +109,8 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         }
     };
 
-    // 4. Xóa ghi chú
     const handleDelete = async (id: string) => {
+        if (!window.confirm("Bạn có chắc chắn muốn xóa ghi chú này?")) return;
         try {
             await deleteDoc(doc(db, 'notes', id));
             setNotes(prev => prev.filter(n => n.id !== id));
@@ -140,24 +153,18 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                     <Search className="w-5 h-5 text-gray-400" />
                     <input 
                         type="text" 
-                        placeholder="Tìm kiếm ghi chú..." 
+                        placeholder="Tìm kiếm..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-transparent outline-none w-full text-gray-700 dark:text-gray-200 placeholder-gray-400"
+                        className="bg-transparent outline-none w-full text-gray-700 dark:text-gray-200"
                     />
                 </div>
 
                 <div className="flex gap-2">
-                    <button 
-                        onClick={() => handleCreateNote('text')}
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-md"
-                    >
+                    <button onClick={() => handleCreateNote('text')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-all shadow-md">
                         <Type className="w-4 h-4" /> Văn bản
                     </button>
-                    <button 
-                        onClick={() => handleCreateNote('checklist')}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-md"
-                    >
+                    <button onClick={() => handleCreateNote('checklist')} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-all shadow-md">
                         <CheckSquare className="w-4 h-4" /> Checklist
                     </button>
                 </div>
@@ -202,67 +209,57 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                                 placeholder="Tiêu đề ghi chú..."
                                 className="text-xl font-bold bg-transparent outline-none text-gray-900 dark:text-white w-full"
                             />
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400">
-                                    {isAutoSaving ? 'Đang lưu...' : 'Đã lưu'}
+                            <div className="flex items-center gap-4">
+                                <span className={`text-xs ${isAutoSaving ? 'text-amber-500' : 'text-emerald-500'} font-medium`}>
+                                    {isAutoSaving ? 'Đang lưu...' : 'Đã lưu lên mây'}
                                 </span>
-                                <button onClick={() => handleDelete(selectedNote.id)} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                <button onClick={() => handleDelete(selectedNote.id)} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors">
                                     <Trash2 className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                             {selectedNote.type === 'checklist' ? (
                                 <div className="space-y-3">
                                     {selectedNote.items?.map((item, idx) => (
                                         <div key={idx} className="flex items-center gap-3 group">
                                             <button 
                                                 onClick={() => toggleChecklistItem(idx)}
-                                                className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${item.done ? 'bg-indigo-600 border-indigo-600' : 'border-gray-400 hover:border-indigo-500'}`}
+                                                className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${item.done ? 'bg-indigo-600 border-indigo-600' : 'border-gray-400'}`}
                                             >
-                                                {item.done && <CheckSquare className="w-3.5 h-3.5 text-white" />}
+                                                {item.done && <X className="w-3.5 h-3.5 text-white" />}
                                             </button>
                                             <input 
                                                 type="text" 
                                                 value={item.text}
                                                 onChange={(e) => handleChecklistItem(idx, e.target.value)}
-                                                placeholder="Việc cần làm..."
-                                                className={`flex-1 bg-transparent outline-none transition-all ${item.done ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-gray-200'}`}
+                                                className={`flex-1 bg-transparent outline-none ${item.done ? 'text-gray-400 line-through' : 'dark:text-white'}`}
                                             />
-                                            <button 
-                                                onClick={() => {
-                                                    const newItems = selectedNote.items?.filter((_, i) => i !== idx);
-                                                    setSelectedNote({...selectedNote, items: newItems});
-                                                }}
-                                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
                                         </div>
                                     ))}
-                                    <button 
-                                        onClick={addChecklistItem}
-                                        className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 text-sm font-medium mt-2"
-                                    >
-                                        <Plus className="w-4 h-4" /> Thêm mục
+                                    <button onClick={addChecklistItem} className="flex items-center gap-2 text-indigo-600 text-sm font-bold mt-4">
+                                        <Plus className="w-4 h-4" /> Thêm mục mới
                                     </button>
                                 </div>
                             ) : (
-                                <textarea 
-                                    value={selectedNote.content}
-                                    onChange={(e) => setSelectedNote({...selectedNote, content: e.target.value})}
-                                    placeholder="Viết xuống suy nghĩ của bạn..."
-                                    className="w-full h-full bg-transparent outline-none text-gray-800 dark:text-gray-200 resize-none leading-relaxed text-lg"
-                                />
+                                <div className="h-full rich-editor">
+                                    <ReactQuill 
+                                        theme="snow"
+                                        value={selectedNote.content}
+                                        onChange={(content) => setSelectedNote({...selectedNote, content})}
+                                        modules={quillModules}
+                                        placeholder="Ghi chú chi tiết tại đây (Bấm nút công thức để gõ LaTeX)..."
+                                        className="h-full border-none"
+                                    />
+                                </div>
                             )}
                         </div>
                     </>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                         <LayoutGrid className="w-16 h-16 mb-4 opacity-50" />
-                        <p className="text-lg font-medium">Chọn một ghi chú để xem</p>
-                        <p className="text-sm">Hoặc tạo mới để bắt đầu</p>
+                        <p className="text-lg font-medium">Chọn một ghi chú để bắt đầu</p>
                     </div>
                 )}
             </div>

@@ -11,9 +11,11 @@
   "dependencies": {
     "@google/genai": "^1.42.0",
     "firebase": "^12.9.0",
+    "katex": "^0.16.33",
     "lucide-react": "^0.563.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-quill": "^2.0.0",
     "recharts": "^3.7.0"
   },
   "devDependencies": {

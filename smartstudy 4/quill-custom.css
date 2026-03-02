@@ -1,0 +1,29 @@
+/* Fix giao diện Dark Mode cho bộ soạn thảo Quill */
+.dark .ql-toolbar {
+  background-color: #28293d !important;
+  border-color: #374151 !important;
+}
+.dark .ql-container {
+  border-color: #374151 !important;
+  background-color: #1e1e2d !important;
+}
+.dark .ql-editor {
+  color: #e5e7eb !important;
+  font-size: 1.1rem;
+}
+.dark .ql-stroke {
+  stroke: #9ca3af !important;
+}
+.dark .ql-picker {
+  color: #9ca3af !important;
+}
+.rich-editor .ql-container.ql-snow {
+  border: none !important;
+}
+.rich-editor .ql-toolbar.ql-snow {
+  border: none !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+.dark .rich-editor .ql-toolbar.ql-snow {
+  border-bottom: 1px solid #374151 !important;
+}

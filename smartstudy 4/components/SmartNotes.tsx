@@ -3,9 +3,15 @@ import { Note, User } from '../types';
 import { Plus, Search, Trash2, CheckSquare, Type, LayoutGrid, X, PenLine } from 'lucide-react';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+// Bổ sung đoạn này vào ngay dưới các dòng import cũ
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
+import 'katex/dist/katex.min.css';
+import '../quill-custom.css';
+// @ts-ignore
+import katex from 'katex';
 
 // Bộ soạn thảo chuyên nghiệp (Đảm bảo đã cài react-quill-new)
-import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import 'katex/dist/katex.min.css';
 import '../quill-custom.css';

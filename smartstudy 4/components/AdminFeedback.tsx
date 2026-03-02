@@ -1,147 +1,163 @@
 import React, { useState, useEffect } from 'react';
-import { User, Feedback } from '../types';
-import { Send, Bug, Lightbulb, MessageSquare, Trash2, CheckCircle } from 'lucide-react';
+import { User } from '../types';
+import { db } from '../firebaseConfig';
+import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { Lightbulb, Bug, MessageSquare, Send, User as UserIcon, Clock } from 'lucide-react';
 
 interface AdminFeedbackProps {
     currentUser: User;
 }
 
+interface Feedback {
+    id: string;
+    author: string;
+    type: 'feature' | 'bug' | 'other';
+    content: string;
+    createdAt: string;
+}
+
 export const AdminFeedback: React.FC<AdminFeedbackProps> = ({ currentUser }) => {
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
-    const [type, setType] = useState<'bug' | 'feature' | 'other'>('feature');
     const [content, setContent] = useState('');
-    const [submitted, setSubmitted] = useState(false);
+    const [type, setType] = useState<'feature' | 'bug' | 'other'>('feature');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Kéo toàn bộ góp ý từ Firebase xuống
+    const fetchFeedbacks = async () => {
+        try {
+            const q = query(collection(db, 'feedbacks'), orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Feedback));
+            setFeedbacks(data);
+        } catch (error) {
+            console.error("Lỗi tải danh sách góp ý:", error);
+        }
+    };
 
     useEffect(() => {
-        const saved = localStorage.getItem('smartstudy_feedback');
-        if (saved) {
-            setFeedbacks(JSON.parse(saved));
-        }
+        fetchFeedbacks();
     }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    // Gửi góp ý mới lên mây
+    const handleSubmit = async () => {
         if (!content.trim()) return;
-
-        const newFeedback: Feedback = {
-            id: Date.now().toString(),
-            user: currentUser.username,
-            type,
-            content,
-            createdAt: new Date().toISOString()
-        };
-
-        const updated = [newFeedback, ...feedbacks];
-        setFeedbacks(updated);
-        localStorage.setItem('smartstudy_feedback', JSON.stringify(updated));
+        setIsSubmitting(true);
         
-        setContent('');
-        setSubmitted(true);
-        setTimeout(() => setSubmitted(false), 3000);
-    };
-
-    const handleDelete = (id: string) => {
-        const updated = feedbacks.filter(f => f.id !== id);
-        setFeedbacks(updated);
-        localStorage.setItem('smartstudy_feedback', JSON.stringify(updated));
-    };
-
-    const getTypeIcon = (t: string) => {
-        switch(t) {
-            case 'bug': return <Bug className="w-4 h-4 text-red-500" />;
-            case 'feature': return <Lightbulb className="w-4 h-4 text-amber-500" />;
-            default: return <MessageSquare className="w-4 h-4 text-blue-500" />;
+        try {
+            const newFeedback = {
+                author: currentUser.username,
+                type,
+                content,
+                createdAt: new Date().toISOString()
+            };
+            await addDoc(collection(db, 'feedbacks'), newFeedback);
+            setContent(''); // Xóa trắng khung nhập
+            fetchFeedbacks(); // Tải lại danh sách ngay lập tức
+        } catch (error) {
+            console.error("Lỗi gửi góp ý:", error);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     const getTypeLabel = (t: string) => {
         switch(t) {
-            case 'bug': return 'Báo lỗi (Bug)';
-            case 'feature': return 'Đề xuất tính năng';
-            default: return 'Góp ý khác';
+            case 'feature': return { text: 'Tính năng mới', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: Lightbulb };
+            case 'bug': return { text: 'Báo lỗi', color: 'text-red-600 bg-red-50 border-red-200', icon: Bug };
+            default: return { text: 'Khác', color: 'text-gray-600 bg-gray-50 border-gray-200', icon: MessageSquare };
         }
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Góp ý cho Quản trị viên</h2>
                 <p className="text-gray-500 dark:text-gray-400">Giúp chúng tôi cải thiện ứng dụng tốt hơn</p>
             </div>
 
-            <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Loại góp ý</label>
-                        <div className="flex gap-4">
-                            <label className={`flex items-center gap-2 p-3 border rounded-xl cursor-pointer transition-colors ${type === 'feature' ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                                <input type="radio" name="type" value="feature" checked={type === 'feature'} onChange={() => setType('feature')} className="hidden" />
-                                <Lightbulb className={`w-5 h-5 ${type === 'feature' ? 'text-amber-500' : 'text-gray-400'}`} />
-                                <span className={`font-medium ${type === 'feature' ? 'text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>Tính năng mới</span>
-                            </label>
-                            <label className={`flex items-center gap-2 p-3 border rounded-xl cursor-pointer transition-colors ${type === 'bug' ? 'border-red-500 bg-red-50 dark:bg-red-500/10' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                                <input type="radio" name="type" value="bug" checked={type === 'bug'} onChange={() => setType('bug')} className="hidden" />
-                                <Bug className={`w-5 h-5 ${type === 'bug' ? 'text-red-500' : 'text-gray-400'}`} />
-                                <span className={`font-medium ${type === 'bug' ? 'text-red-700 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}>Báo lỗi</span>
-                            </label>
-                            <label className={`flex items-center gap-2 p-3 border rounded-xl cursor-pointer transition-colors ${type === 'other' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                                <input type="radio" name="type" value="other" checked={type === 'other'} onChange={() => setType('other')} className="hidden" />
-                                <MessageSquare className={`w-5 h-5 ${type === 'other' ? 'text-blue-500' : 'text-gray-400'}`} />
-                                <span className={`font-medium ${type === 'other' ? 'text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>Khác</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nội dung chi tiết</label>
-                        <textarea 
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            placeholder="Mô tả chi tiết tính năng bạn muốn thêm hoặc lỗi bạn gặp phải..."
-                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#28292c] text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none min-h-[120px]"
-                        />
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                        {submitted ? (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-medium text-sm flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4" /> Gửi góp ý thành công!
-                            </span>
-                        ) : <span></span>}
+            {/* Khung gửi góp ý */}
+            <div className="bg-white dark:bg-[#1e1e2d] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Loại góp ý</label>
+                    <div className="flex flex-wrap gap-3">
                         <button 
-                            type="submit"
-                            disabled={!content.trim()}
-                            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors"
+                            onClick={() => setType('feature')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${type === 'feature' ? 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-transparent dark:border-gray-700 dark:text-gray-400'}`}
                         >
-                            <Send className="w-4 h-4" /> Gửi góp ý
+                            <Lightbulb className="w-4 h-4" /> Tính năng mới
+                        </button>
+                        <button 
+                            onClick={() => setType('bug')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${type === 'bug' ? 'bg-red-50 border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-700 dark:text-red-400' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-transparent dark:border-gray-700 dark:text-gray-400'}`}
+                        >
+                            <Bug className="w-4 h-4" /> Báo lỗi
+                        </button>
+                        <button 
+                            onClick={() => setType('other')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${type === 'other' ? 'bg-gray-100 border-gray-300 text-gray-800 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-transparent dark:border-gray-700 dark:text-gray-400'}`}
+                        >
+                            <MessageSquare className="w-4 h-4" /> Khác
                         </button>
                     </div>
-                </form>
+                </div>
+
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nội dung chi tiết</label>
+                    <textarea 
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="Mô tả chi tiết tính năng bạn muốn thêm hoặc lỗi bạn gặp phải..."
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151521] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 min-h-[120px] resize-y"
+                    />
+                </div>
+
+                <div className="flex justify-end">
+                    <button 
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || !content.trim()}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-white transition-all ${isSubmitting || !content.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg'}`}
+                    >
+                        {isSubmitting ? 'Đang gửi...' : <><Send className="w-4 h-4" /> Gửi góp ý</>}
+                    </button>
+                </div>
             </div>
 
-            <div className="mt-8">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Lịch sử góp ý của bạn</h3>
-                <div className="space-y-3">
-                    {feedbacks.filter(f => f.user === currentUser.username).length === 0 ? (
-                        <p className="text-gray-500 dark:text-gray-400 text-sm italic">Bạn chưa gửi góp ý nào.</p>
+            {/* Danh sách góp ý công khai */}
+            <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Danh sách góp ý từ cộng đồng</h3>
+                <div className="space-y-4">
+                    {feedbacks.length === 0 ? (
+                        <p className="text-gray-500 dark:text-gray-400 italic bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl text-center border border-gray-100 dark:border-gray-800">Chưa có góp ý nào. Hãy là người đầu tiên!</p>
                     ) : (
-                        feedbacks.filter(f => f.user === currentUser.username).map(feedback => (
-                            <div key={feedback.id} className="bg-white dark:bg-[#1e1e2d] p-4 rounded-xl border border-gray-100 dark:border-gray-800 flex gap-4 items-start">
-                                <div className="mt-1">
-                                    {getTypeIcon(feedback.type)}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className="font-medium text-sm text-gray-900 dark:text-white">{getTypeLabel(feedback.type)}</span>
-                                        <span className="text-xs text-gray-500">{new Date(feedback.createdAt).toLocaleDateString('vi-VN')}</span>
+                        feedbacks.map(fb => {
+                            const typeConfig = getTypeLabel(fb.type);
+                            const Icon = typeConfig.icon;
+                            return (
+                                <div key={fb.id} className="bg-white dark:bg-[#1e1e2d] p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex gap-4">
+                                    <div className="hidden sm:block">
+                                        <div className={`p-3 rounded-full border ${typeConfig.color}`}>
+                                            <Icon className="w-5 h-5" />
+                                        </div>
                                     </div>
-                                    <p className="text-gray-600 dark:text-gray-300 text-sm whitespace-pre-wrap">{feedback.content}</p>
+                                    <div className="flex-1">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                                                    <UserIcon className="w-4 h-4 text-gray-400" /> {fb.author}
+                                                </span>
+                                                <span className={`text-xs px-2 py-0.5 rounded-full border ${typeConfig.color} hidden sm:inline-block`}>
+                                                    {typeConfig.text}
+                                                </span>
+                                            </div>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                <Clock className="w-3 h-3" /> {new Date(fb.createdAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit'})}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">{fb.content}</p>
+                                    </div>
                                 </div>
-                                <button onClick={() => handleDelete(feedback.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </div>

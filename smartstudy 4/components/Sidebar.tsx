@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewState } from '../types';
-import { LayoutDashboard, Calendar, Target, GraduationCap, UserCircle, Timer, Moon, Sun, StickyNote, Settings, MessageSquare, TrendingUp, Flag } from 'lucide-react';
+import { LayoutDashboard, Calendar, Target, GraduationCap, UserCircle, Timer, Moon, Sun, Settings, MessageSquare, TrendingUp, Flag } from 'lucide-react';
 
 interface SidebarProps {
     currentView: ViewState;

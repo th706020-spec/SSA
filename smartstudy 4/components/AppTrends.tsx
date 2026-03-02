@@ -23,7 +23,6 @@ export const AppTrends: React.FC = () => {
                 let completedTasks = 0;
                 let totalStudyMinutes = 0;
                 
-                // ĐỔI LẠI: Dùng object này để cộng dồn SỐ PHÚT thay vì đếm số lượng
                 const categoryMinutes: Record<string, number> = {
                     study: 0,
                     project: 0,
@@ -43,7 +42,6 @@ export const AppTrends: React.FC = () => {
                             completedTasks++;
                         }
                         
-                        // Xác định số phút của task này (Ưu tiên thời gian thực tế, nếu không có thì lấy thời gian dự kiến)
                         let taskMinutes = 0;
                         if (task.actualDuration) {
                             taskMinutes = task.actualDuration;
@@ -52,11 +50,9 @@ export const AppTrends: React.FC = () => {
                             taskMinutes = task.duration || 0;
                             totalStudyMinutes += (task.duration || 0);
                         } else {
-                            // Task chưa hoàn thành thì vẫn tính thời gian dự kiến vào biểu đồ phân bổ
                             taskMinutes = task.duration || 0; 
                         }
 
-                        // Cộng dồn phút vào đúng danh mục
                         if (task.category && categoryMinutes[task.category] !== undefined) {
                             categoryMinutes[task.category] += taskMinutes;
                         }
@@ -67,7 +63,6 @@ export const AppTrends: React.FC = () => {
                 const avgStudyHoursPerUser = totalUsers ? (totalStudyMinutes / 60 / totalUsers).toFixed(1) : '0';
                 const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-                // CHUYỂN PHÚT SANG GIỜ (Làm tròn 1 chữ số thập phân)
                 const categoryData = [
                     { name: 'Học tập', value: Number((categoryMinutes.study / 60).toFixed(1)), color: '#4f46e5' },
                     { name: 'Dự án', value: Number((categoryMinutes.project / 60).toFixed(1)), color: '#0ea5e9' },
@@ -94,10 +89,10 @@ export const AppTrends: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-300">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Xu hướng người dùng App</h2>
-                <p className="text-gray-500 dark:text-gray-400">Thống kê dữ liệu trung bình từ tất cả người dùng (Real-time từ Firebase)</p>
+                {/* ĐÃ XÓA CHỮ (Real-time từ Firebase) Ở DÒNG BÊN DƯỚI 👇 */}
+                <p className="text-gray-500 dark:text-gray-400">Thống kê dữ liệu trung bình từ tất cả người dùng</p>
             </div>
 
-            {/* Các thẻ Stats giữ nguyên */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <div className="flex items-center gap-4">

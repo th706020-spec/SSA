@@ -1,11 +1,12 @@
-/* Làm hiện các nút bấm trên thanh công cụ */
-.ql-toolbar.ql-snow {
-  border: 1px solid #e5e7eb !important;
-  background-color: white !important;
-  border-radius: 8px 8px 0 0 !important;
-}
-.ql-container.ql-snow {
-  border: 1px solid #e5e7eb !important;
-  border-radius: 0 0 8px 8px !important;
-  min-height: 300px;
-}
+/* Custom cho Rich Editor trong Dark Mode */
+.dark .ql-toolbar { background-color: #28293d !important; border-color: #374151 !important; }
+.dark .ql-container { border-color: #374151 !important; background-color: #1e1e2d !important; }
+.dark .ql-editor { color: #e5e7eb !important; font-size: 1.1rem; }
+.dark .ql-stroke { stroke: #9ca3af !important; }
+.dark .ql-picker { color: #9ca3af !important; }
+.rich-editor .ql-container.ql-snow { border: none !important; }
+.rich-editor .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #f3f4f6 !important; }
+.dark .rich-editor .ql-toolbar.ql-snow { border-bottom: 1px solid #374151 !important; }
+/* Chỉnh sửa lại list và công thức toán cho đẹp */
+.ql-editor li { padding-bottom: 4px; }
+.ql-editor .ql-formula { background-color: rgba(79, 70, 229, 0.1); padding: 2px 4px; border-radius: 4px; }

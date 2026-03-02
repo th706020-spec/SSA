@@ -12,7 +12,7 @@ import '../quill-custom.css';
 // @ts-ignore
 import katex from 'katex';
 
-// Cấu hình LaTeX toàn cục
+// Cấu hình LaTeX toàn cục để không bị lỗi gạch đỏ window
 (window as any).katex = katex;
 
 interface SmartNotesProps {
@@ -37,12 +37,13 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         toolbar: [
             [{ 'header': [1, 2, 3, false] }],
             ['bold', 'italic', 'underline', 'strike'],
-            [{ 'color': [] }, { 'background': [] }], // Đổi màu chữ & Highlight
+            [{ 'color': [] }, { 'background': [] }], 
             [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-            ['formula', 'link', 'clean'], // Nút gõ LaTeX (biểu tượng Pi hoặc Sigma)
+            ['formula', 'link', 'clean'], 
         ],
     };
 
+    // Tải dữ liệu từ Firebase
     useEffect(() => {
         const fetchNotes = async () => {
             try {
@@ -64,6 +65,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         fetchNotes();
     }, [currentUser.username]);
 
+    // Logic Tự động lưu (Auto-save)
     useEffect(() => {
         if (!selectedNote || !selectedNote.id) return;
 
@@ -88,13 +90,16 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         return () => clearTimeout(timer);
     }, [selectedNote]);
 
+    // Tạo ghi chú mới - ĐÃ FIX LỖI createdAt
     const handleCreateNote = async (type: 'text' | 'checklist') => {
+        const now = new Date().toISOString();
         const newNoteData = {
             title: '',
             content: '',
             type: type,
             items: type === 'checklist' ? [] : null,
-            updatedAt: new Date().toISOString(),
+            createdAt: now, // Đã thêm để khớp với types.ts
+            updatedAt: now,
             color: 'bg-white dark:bg-[#27273a]',
             authorId: currentUser.username
         };
@@ -147,7 +152,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
 
     return (
         <div className="flex h-[calc(100vh-100px)] gap-6 animate-in fade-in duration-300">
-            {/* Left List */}
+            {/* Cột danh sách bên trái */}
             <div className="w-full md:w-80 flex flex-col gap-4">
                 <div className="flex items-center gap-2 bg-white dark:bg-[#1e1e2d] p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                     <Search className="w-5 h-5 text-gray-400" />
@@ -197,7 +202,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                 </div>
             </div>
 
-            {/* Right Editor */}
+            {/* Khu vực soạn thảo bên phải */}
             <div className="flex-1 bg-white dark:bg-[#1e1e2d] rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden relative">
                 {selectedNote ? (
                     <>
@@ -211,7 +216,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                             />
                             <div className="flex items-center gap-4">
                                 <span className={`text-xs ${isAutoSaving ? 'text-amber-500' : 'text-emerald-500'} font-medium`}>
-                                    {isAutoSaving ? 'Đang lưu...' : 'Đã lưu lên mây'}
+                                    {isAutoSaving ? 'Đang lưu...' : 'Đã lưu'}
                                 </span>
                                 <button onClick={() => handleDelete(selectedNote.id)} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors">
                                     <Trash2 className="w-5 h-5" />
@@ -249,7 +254,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                                         value={selectedNote.content}
                                         onChange={(content) => setSelectedNote({...selectedNote, content})}
                                         modules={quillModules}
-                                        placeholder="Ghi chú chi tiết tại đây (Bấm nút công thức để gõ LaTeX)..."
+                                        placeholder="Nhập nội dung (Sử dụng biểu tượng công thức để gõ LaTeX)..."
                                         className="h-full border-none"
                                     />
                                 </div>

@@ -20,6 +20,12 @@ export interface Feedback {
     createdAt: string;
 }
 
+export interface Note {
+    // ... các dòng cũ giữ nguyên
+    createdAt: string; 
+    updatedAt: string;
+}
+
 // User Interface
 export interface User {
     username: string;

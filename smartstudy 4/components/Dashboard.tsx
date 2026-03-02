@@ -30,12 +30,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         return h > 0 ? `${h}h${m > 0 ? ` ${m}p` : ''}` : `${m}p`;
     };
     
-    // Data for charts
+    // ĐÃ SỬA: Tính tổng số phút cho từng danh mục thay vì đếm số lượng công việc
+    const categoryMinutes: Record<string, number> = {
+        study: 0,
+        project: 0,
+        review: 0,
+        break: 0
+    };
+
+    tasks.forEach(task => {
+        let taskMins = 0;
+        if (task.actualDuration) {
+            taskMins = task.actualDuration;
+        } else if (task.completed) {
+            taskMins = task.duration || 0;
+        } else {
+            taskMins = task.duration || 0;
+        }
+
+        if (task.category && categoryMinutes[task.category] !== undefined) {
+            categoryMinutes[task.category] += taskMins;
+        }
+    });
+
+    // Đổi ra giờ và làm tròn 1 chữ số thập phân
     const categoryData = [
-        { name: 'Học tập', value: tasks.filter(t => t.category === 'study').length },
-        { name: 'Dự án', value: tasks.filter(t => t.category === 'project').length },
-        { name: 'Ôn tập', value: tasks.filter(t => t.category === 'review').length },
-        { name: 'Nghỉ ngơi', value: tasks.filter(t => t.category === 'break').length },
+        { name: 'Học tập', value: Number((categoryMinutes.study / 60).toFixed(1)) },
+        { name: 'Dự án', value: Number((categoryMinutes.project / 60).toFixed(1)) },
+        { name: 'Ôn tập', value: Number((categoryMinutes.review / 60).toFixed(1)) },
+        { name: 'Nghỉ ngơi', value: Number((categoryMinutes.break / 60).toFixed(1)) },
     ].filter(d => d.value > 0);
 
     const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#6B7280'];
@@ -116,7 +139,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Distribution Chart */}
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Phân bổ thời gian</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Phân bổ thời gian (Theo Giờ)</h3>
                     <div className="h-64">
                         {categoryData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -135,7 +158,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff'}} />
+                                    <Tooltip 
+                                        formatter={(value: number) => [`${value}h`, 'Thời lượng']}
+                                        contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff'}} 
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (

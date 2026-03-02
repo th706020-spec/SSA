@@ -1,69 +1,82 @@
 import { User, Task, Project, StudentProfile, Note } from '../types';
+import { db } from '../firebaseConfig';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const STORAGE_KEY = 'smartstudy_users';
 const CURRENT_USER_KEY = 'smartstudy_current_user';
+const LOCAL_USER_DATA = 'smartstudy_local_data';
 
 export const authService = {
-    // Get all users
-    getUsers: (): Record<string, User> => {
-        const users = localStorage.getItem(STORAGE_KEY);
-        return users ? JSON.parse(users) : {};
-    },
+    // 1. Đăng ký (Đẩy thẳng lên Firebase)
+    register: async (username: string, password: string): Promise<boolean> => {
+        try {
+            const userRef = doc(db, 'users', username);
+            const docSnap = await getDoc(userRef);
 
-    // Save users map
-    saveUsers: (users: Record<string, User>) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-    },
+            if (docSnap.exists()) return false; // Tài khoản đã tồn tại
 
-    // Register
-    register: (username: string, password: string): boolean => {
-        const users = authService.getUsers();
-        if (users[username]) return false; // User exists
+            const newUser: User = {
+                username,
+                password,
+                avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${username}`,
+                settings: {
+                    notifications: true,
+                    soundEnabled: true
+                },
+                data: {
+                    tasks: [],
+                    projects: [],
+                    profile: null,
+                    notes: []
+                }
+            };
 
-        users[username] = {
-            username,
-            password,
-            avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${username}`, // Default avatar
-            settings: {
-                notifications: true,
-                soundEnabled: true
-            },
-            data: {
-                tasks: [],
-                projects: [],
-                profile: null,
-                notes: []
-            }
-        };
-        authService.saveUsers(users);
-        return true;
-    },
-
-    // Login
-    login: (username: string, password: string): User | null => {
-        const users = authService.getUsers();
-        const user = users[username];
-        if (user && user.password === password) {
-            localStorage.setItem(CURRENT_USER_KEY, username);
-            return user;
+            // Lưu lên Firebase
+            await setDoc(userRef, newUser);
+            return true;
+        } catch (error) {
+            console.error("Lỗi đăng ký Firebase:", error);
+            return false;
         }
-        return null;
     },
 
-    // Logout
+    // 2. Đăng nhập (Kiểm tra dữ liệu từ Firebase)
+    login: async (username: string, password: string): Promise<User | null> => {
+        try {
+            const userRef = doc(db, 'users', username);
+            const docSnap = await getDoc(userRef);
+
+            if (docSnap.exists()) {
+                const user = docSnap.data() as User;
+                if (user.password === password) {
+                    // Lưu cắm chốt ở máy để lần sau load cho nhanh
+                    localStorage.setItem(CURRENT_USER_KEY, username);
+                    localStorage.setItem(LOCAL_USER_DATA, JSON.stringify(user));
+                    return user;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error("Lỗi đăng nhập Firebase:", error);
+            return null;
+        }
+    },
+
+    // 3. Đăng xuất
     logout: () => {
         localStorage.removeItem(CURRENT_USER_KEY);
+        localStorage.removeItem(LOCAL_USER_DATA);
     },
 
-    // Get current logged in user
+    // 4. Lấy dữ liệu người dùng ngay lập tức (Để giao diện không bị giật)
     getCurrentUser: (): User | null => {
         const username = localStorage.getItem(CURRENT_USER_KEY);
-        if (!username) return null;
-        const users = authService.getUsers();
-        return users[username] || null;
+        const userDataString = localStorage.getItem(LOCAL_USER_DATA);
+        
+        if (!username || !userDataString) return null;
+        return JSON.parse(userDataString) as User;
     },
 
-    // Update current user data
+    // 5. Cập nhật dữ liệu (Lưu ở máy trước, đẩy lên mây chạy ngầm)
     updateUserData: (
         tasks?: Task[], 
         projects?: Project[], 
@@ -73,18 +86,24 @@ export const authService = {
         avatar?: string
     ) => {
         const username = localStorage.getItem(CURRENT_USER_KEY);
-        if (!username) return;
+        const userDataString = localStorage.getItem(LOCAL_USER_DATA);
+        
+        if (!username || !userDataString) return;
 
-        const users = authService.getUsers();
-        if (users[username]) {
-            if (tasks !== undefined) users[username].data.tasks = tasks;
-            if (projects !== undefined) users[username].data.projects = projects;
-            if (profile !== undefined) users[username].data.profile = profile;
-            if (notes !== undefined) users[username].data.notes = notes;
-            if (settings !== undefined) users[username].settings = settings;
-            if (avatar !== undefined) users[username].avatar = avatar;
-            
-            authService.saveUsers(users);
-        }
+        const currentUser = JSON.parse(userDataString) as User;
+
+        // Cập nhật vào bản nháp local
+        if (tasks !== undefined) currentUser.data.tasks = tasks;
+        if (projects !== undefined) currentUser.data.projects = projects;
+        if (profile !== undefined) currentUser.data.profile = profile;
+        if (notes !== undefined) currentUser.data.notes = notes;
+        if (settings !== undefined) currentUser.settings = settings;
+        if (avatar !== undefined) currentUser.avatar = avatar;
+
+        localStorage.setItem(LOCAL_USER_DATA, JSON.stringify(currentUser));
+
+        // CHẠY NGẦM: Bắn dữ liệu lên Firebase
+        setDoc(doc(db, 'users', username), currentUser, { merge: true })
+            .catch(err => console.error("Lỗi đồng bộ ngầm lên Firebase:", err));
     }
 };

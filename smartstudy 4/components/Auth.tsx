@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { User } from '../types';
-import { GraduationCap, ArrowRight, UserPlus, LogIn, Users } from 'lucide-react';
-import { auth, db } from '../firebaseConfig';
+import { GraduationCap, UserPlus, LogIn, Users } from 'lucide-react';
+import { db } from '../firebaseConfig';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface AuthProps {
     onLogin: (user: User) => void;
@@ -14,68 +15,67 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [userCount, setUserCount] = useState(0);
+    const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái loading để UX mượt hơn
 
-    // Real-time update logic
+    // Real-time update logic (Kéo từ Firebase)
     useEffect(() => {
-        const fetchUserCount = () => {
-            const users = authService.getUsers();
-            setUserCount(Object.keys(users).length);
-        };
-
-        // Initial fetch
-        fetchUserCount();
-
-        // Listen for storage events (updates from other tabs)
-        const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'smartstudy_users') {
-                fetchUserCount();
+        const fetchUserCount = async () => {
+            try {
+                // Quét số lượng documents trong collection 'users'
+                const querySnapshot = await getDocs(collection(db, 'users'));
+                setUserCount(querySnapshot.size);
+            } catch (err) {
+                console.error("Lỗi đếm số user từ Firebase:", err);
             }
         };
 
-        // Custom interval to check within the same tab if authService doesn't trigger storage event
-        // (Normally storage event is cross-tab only, so we can also wrap authService or just poll gently)
-        const interval = setInterval(fetchUserCount, 2000);
-
-        window.addEventListener('storage', handleStorageChange);
+        fetchUserCount();
+        
+        // Quét lại mỗi 10 giây để cập nhật số lượng (Thay vì 2s như trước để tránh quá tải Firebase)
+        const interval = setInterval(fetchUserCount, 10000);
 
         return () => {
-            window.removeEventListener('storage', handleStorageChange);
             clearInterval(interval);
         };
     }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Sửa thành hàm async vì authService giờ đã gọi lên mây
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsLoading(true); // Bật hiệu ứng loading
 
-        // Clean inputs to avoid whitespace errors
         const cleanUsername = username.trim();
         const cleanPassword = password.trim();
 
         if (!cleanUsername || !cleanPassword) {
             setError('Vui lòng điền đầy đủ thông tin');
+            setIsLoading(false);
             return;
         }
 
         if (isLogin) {
-            const user = authService.login(cleanUsername, cleanPassword);
+            // Đợi Firebase trả kết quả đăng nhập
+            const user = await authService.login(cleanUsername, cleanPassword);
             if (user) {
                 onLogin(user);
             } else {
                 setError('Tên đăng nhập hoặc mật khẩu không đúng');
             }
         } else {
-            const success = authService.register(cleanUsername, cleanPassword);
+            // Đợi Firebase trả kết quả đăng ký
+            const success = await authService.register(cleanUsername, cleanPassword);
             if (success) {
-                // Update local count immediately for better UX
                 setUserCount(prev => prev + 1);
                 // Auto login after register
-                const user = authService.login(cleanUsername, cleanPassword);
+                const user = await authService.login(cleanUsername, cleanPassword);
                 if (user) onLogin(user);
             } else {
                 setError('Tên đăng nhập đã tồn tại');
             }
         }
+        
+        setIsLoading(false); // Tắt hiệu ứng loading
     };
 
     return (
@@ -119,6 +119,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             onChange={(e) => setUsername(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             placeholder="Nhập tên đăng nhập..."
+                            disabled={isLoading}
                         />
                     </div>
 
@@ -130,14 +131,18 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             placeholder="Nhập mật khẩu..."
+                            disabled={isLoading}
                         />
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2"
+                        disabled={isLoading}
+                        className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                        {isLogin ? (
+                        {isLoading ? (
+                            <span className="animate-pulse">Đang xử lý...</span>
+                        ) : isLogin ? (
                             <> <LogIn className="w-5 h-5"/> Đăng nhập </>
                         ) : (
                             <> <UserPlus className="w-5 h-5"/> Đăng ký </>
@@ -149,6 +154,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     <button
                         onClick={() => { setIsLogin(!isLogin); setError(''); setUsername(''); setPassword(''); }}
                         className="text-indigo-600 font-medium hover:underline text-sm"
+                        disabled={isLoading}
                     >
                         {isLogin ? 'Chưa có tài khoản? Đăng ký ngay' : 'Đã có tài khoản? Đăng nhập'}
                     </button>

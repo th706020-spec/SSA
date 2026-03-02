@@ -30,7 +30,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         return h > 0 ? `${h}h${m > 0 ? ` ${m}p` : ''}` : `${m}p`;
     };
     
-    // ĐÃ SỬA: Tính tổng số phút cho từng danh mục thay vì đếm số lượng công việc
     const categoryMinutes: Record<string, number> = {
         study: 0,
         project: 0,
@@ -38,22 +37,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         break: 0
     };
 
+    // Cộng dồn thời gian (tính bằng phút) cho từng nhóm
     tasks.forEach(task => {
-        let taskMins = 0;
-        if (task.actualDuration) {
-            taskMins = task.actualDuration;
-        } else if (task.completed) {
-            taskMins = task.duration || 0;
-        } else {
-            taskMins = task.duration || 0;
-        }
-
+        const taskMins = task.actualDuration || task.duration || 0;
         if (task.category && categoryMinutes[task.category] !== undefined) {
             categoryMinutes[task.category] += taskMins;
         }
     });
 
-    // Đổi ra giờ và làm tròn 1 chữ số thập phân
+    // Chia 60 để ra số Giờ (h), giữ lại 1 số thập phân
     const categoryData = [
         { name: 'Học tập', value: Number((categoryMinutes.study / 60).toFixed(1)) },
         { name: 'Dự án', value: Number((categoryMinutes.project / 60).toFixed(1)) },
@@ -68,7 +60,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         progress: p.progress
     }));
 
-    // Empty State for New User
     if (tasks.length === 0 && projects.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
@@ -153,14 +144,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                                         fill="#8884d8"
                                         paddingAngle={5}
                                         dataKey="value"
+                                        label={({ value }) => `${value}h`} // HIỆN CHỮ 'h' BÊN NGOÀI MIẾNG BÁNH
                                     >
                                         {categoryData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
+                                    {/* HIỆN CHỮ 'h' KHI DI CHUỘT VÀO */}
                                     <Tooltip 
-                                        formatter={(value: number) => [`${value}h`, 'Thời lượng']}
-                                        contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff'}} 
+                                        formatter={(value: any) => [`${value}h`, 'Thời lượng']}
+                                        contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff', borderRadius: '8px'}} 
+                                        itemStyle={{ color: '#fff' }}
                                     />
                                 </PieChart>
                             </ResponsiveContainer>
@@ -190,7 +184,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#374151" opacity={0.2} />
                                     <XAxis type="number" domain={[0, 100]} hide />
                                     <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12, fill: '#9ca3af'}} />
-                                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff'}} />
+                                    <Tooltip 
+                                        cursor={{fill: 'transparent'}} 
+                                        formatter={(value: any) => [`${value}%`, 'Hoàn thành']}
+                                        contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff', borderRadius: '8px'}} 
+                                        itemStyle={{ color: '#fff' }}
+                                    />
                                     <Bar dataKey="progress" fill="#4F46E5" radius={[0, 4, 4, 0]} barSize={20} />
                                 </BarChart>
                             </ResponsiveContainer>

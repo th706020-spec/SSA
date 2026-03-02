@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ForumPost, ForumComment } from '../types';
 import { forumService } from '../services/forumService';
 import { User } from '../types';
-import { MessageSquare, Heart, Send, Plus, Tag, Search, User as UserIcon, X, Hash, Filter, CheckCircle2 } from 'lucide-react';
+import { MessageSquare, Heart, Send, Plus, Tag, Search, User as UserIcon, X, Hash, Filter, CheckCircle2, Trash2 } from 'lucide-react';
 
 interface CommunityForumProps {
     currentUser: User;
@@ -18,7 +18,6 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
     // State for filtering
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
-    // 1. Dùng async/await để lấy dữ liệu từ Firebase khi mới vào trang
     useEffect(() => {
         const fetchPosts = async () => {
             const data = await forumService.getPosts();
@@ -27,7 +26,6 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
         fetchPosts();
     }, []);
 
-    // Get all unique tags and count occurrences to find "Popular" ones
     const tagCounts = posts.flatMap(p => p.tags).reduce((acc, tag) => {
         acc[tag] = (acc[tag] || 0) + 1;
         return acc;
@@ -39,12 +37,11 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
         ? posts.filter(p => p.tags.includes(selectedTag)) 
         : posts;
 
-    // 2. Sửa hàm tạo bài đăng
     const handleCreatePost = async () => {
         if (!newPost.title || !newPost.content) return;
         
         const post: ForumPost = {
-            id: '', // Firebase sẽ tự tạo ID
+            id: '', 
             author: currentUser.username,
             authorAvatar: currentUser.avatar || '',
             title: newPost.title,
@@ -55,20 +52,21 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
             createdAt: new Date().toISOString()
         };
         
-        // Đóng modal và clear form ngay lập tức
         setIsCreateModalOpen(false);
         setNewPost({ title: '', content: '', tags: '' });
 
-        // Gọi API tạo post trên Firebase
         const createdPost = await forumService.createPost(post);
-        
-        // Nối bài mới vào đầu danh sách hiện tại
         setPosts(prevPosts => [createdPost, ...prevPosts]);
     };
 
-    // 3. Sửa hàm Like (Cập nhật UI trước, gọi API sau)
+    const handleDeletePost = async (postId: string) => {
+        if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này không? Hành động này không thể hoàn tác.')) {
+            setPosts(prevPosts => prevPosts.filter(p => p.id !== postId));
+            await forumService.deletePost(postId);
+        }
+    };
+
     const handleLike = async (postId: string) => {
-        // Cập nhật giao diện ngay lập tức cho mượt
         setPosts(prevPosts => prevPosts.map(p => {
             if (p.id === postId) {
                 const currentLikes = p.likes || [];
@@ -83,11 +81,9 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
             return p;
         }));
 
-        // Gửi lệnh lên Firebase
         await forumService.toggleLike(postId, currentUser.username);
     };
 
-    // 4. Sửa hàm Comment (Cập nhật UI trước, gọi API sau)
     const handleComment = async (postId: string) => {
         if (!commentText.trim()) return;
         
@@ -99,7 +95,6 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
             createdAt: new Date().toISOString()
         };
 
-        // Clear ô input và cập nhật UI ngay lập tức
         setCommentText('');
         setPosts(prevPosts => prevPosts.map(p => {
             if (p.id === postId) {
@@ -108,7 +103,6 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
             return p;
         }));
 
-        // Gửi bình luận lên Firebase
         await forumService.addComment(postId, newCommentObj);
     };
 
@@ -128,7 +122,6 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                     </button>
                 </div>
 
-                {/* Topics / Tags Filter Bar */}
                 <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
                     <div className="flex items-center gap-1 text-sm font-medium text-gray-500 dark:text-gray-400 mr-2">
                         <Filter className="w-4 h-4" /> Chủ đề:
@@ -173,19 +166,34 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                     filteredPosts.map(post => (
                         <div key={post.id} className="bg-white dark:bg-[#1e1e2d] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="p-6">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <img 
-                                        src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.author}`} 
-                                        alt="avatar" 
-                                        className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200"
-                                    />
-                                    <div>
-                                        <div className="flex items-center gap-1">
-                                            <h3 className="font-bold text-gray-900 dark:text-white text-sm">{post.author}</h3>
-                                            <CheckCircle2 className="w-3 h-3 text-blue-500" title="Thành viên đã xác thực" />
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <img 
+                                            src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.author}`} 
+                                            alt="avatar" 
+                                            className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200"
+                                        />
+                                        <div>
+                                            <div className="flex items-center gap-1">
+                                                <h3 className="font-bold text-gray-900 dark:text-white text-sm">{post.author}</h3>
+                                                {/* Đã sửa thẻ CheckCircle2 bằng cách bọc span */}
+                                                <span title="Thành viên đã xác thực" className="flex items-center">
+                                                    <CheckCircle2 className="w-3 h-3 text-blue-500" />
+                                                </span>
+                                            </div>
+                                            <span className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                         </div>
-                                        <span className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
+                                    
+                                    {post.author === currentUser.username && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
+                                            className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                            title="Xóa bài viết của bạn"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    )}
                                 </div>
                                 
                                 <h2 
@@ -246,7 +254,10 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                                     <div className="flex justify-between items-center mb-1">
                                                         <div className="flex items-center gap-1">
                                                             <span className="font-bold text-xs dark:text-white">{comment.author}</span>
-                                                            <CheckCircle2 className="w-3 h-3 text-blue-500" title="Thành viên đã xác thực" />
+                                                            {/* Đã sửa thẻ CheckCircle2 bằng cách bọc span */}
+                                                            <span title="Thành viên đã xác thực" className="flex items-center">
+                                                                <CheckCircle2 className="w-3 h-3 text-blue-500" />
+                                                            </span>
                                                         </div>
                                                         <span className="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
                                                     </div>

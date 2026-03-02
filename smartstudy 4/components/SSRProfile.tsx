@@ -10,7 +10,7 @@ export const SSRProfile: React.FC<SSRProfileProps> = ({ profile }) => {
     const analysis = profile.analysis;
     const [selectedPhase, setSelectedPhase] = useState<RoadmapPhase | null>(null);
 
-    if (!analysis) return <div>Chưa có dữ liệu phân tích.</div>;
+    if (!analysis) return <div className="p-8 text-center text-gray-500">Chưa có dữ liệu phân tích.</div>;
 
     const renderCard = (icon: any, title: string, result: AnalysisResultGroup) => (
         <div className={`rounded-xl border shadow-sm overflow-hidden bg-white dark:bg-[#1e1e2d] dark:border-gray-700`}>
@@ -38,7 +38,7 @@ export const SSRProfile: React.FC<SSRProfileProps> = ({ profile }) => {
     );
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 relative">
+        <div className="space-y-8 animate-in fade-in duration-500">
             {/* Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
                 <div className="absolute right-0 top-0 opacity-10">
@@ -87,10 +87,17 @@ export const SSRProfile: React.FC<SSRProfileProps> = ({ profile }) => {
                 </div>
             </div>
 
-            {/* Detail Modal */}
+            {/* 👇 ĐÃ FIX: DETAIL MODAL PHỦ KÍN MÀN HÌNH 👇 */}
             {selectedPhase && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => setSelectedPhase(null)}>
-                    <div className="bg-white dark:bg-[#28292c] w-full max-w-lg rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    {/* Lớp nền đen phủ toàn bộ trình duyệt */}
+                    <div 
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm" 
+                        onClick={() => setSelectedPhase(null)}
+                    ></div>
+                    
+                    {/* Nội dung Modal */}
+                    <div className="bg-white dark:bg-[#28292c] w-full max-w-lg rounded-2xl shadow-2xl p-6 relative z-[101] animate-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-start mb-4 border-b border-gray-100 dark:border-gray-700 pb-4">
                             <div>
                                 <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1 block">
@@ -98,15 +105,15 @@ export const SSRProfile: React.FC<SSRProfileProps> = ({ profile }) => {
                                 </span>
                                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{selectedPhase.focus}</h3>
                             </div>
-                            <button onClick={() => setSelectedPhase(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">
+                            <button onClick={() => setSelectedPhase(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
                                 <X className="w-6 h-6 text-gray-500" />
                             </button>
                         </div>
                         <div className="prose dark:prose-invert">
-                            <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed">
+                            <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed mb-6">
                                 {selectedPhase.details || "Thực hiện các thói quen nhỏ hàng ngày như Pomodoro, tắt thiết bị trước khi ngủ 30 phút và đặt mục tiêu rõ ràng cho từng buổi học."}
                             </p>
-                            <div className="mt-6 bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
                                 <h4 className="font-bold text-indigo-900 dark:text-indigo-300 mb-2">Hành động ngay:</h4>
                                 <ul className="list-disc pl-5 text-indigo-800 dark:text-indigo-200 space-y-1">
                                     <li>Lên lịch học vào khung giờ vàng.</li>

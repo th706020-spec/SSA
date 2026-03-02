@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Project, Task } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Clock, CheckCircle2, AlertCircle, X, List } from 'lucide-react';
+import { Clock, AlertCircle } from 'lucide-react';
 
 interface DashboardProps {
     tasks: Task[];
@@ -9,14 +9,12 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
-    const [showTasksModal, setShowTasksModal] = useState(false);
-
-    // Calculate stats based on REAL USER DATA
+    // Tính toán tỷ lệ hoàn thành (vẫn giữ lại để hiện trên câu chào)
     const completedTasksList = tasks.filter(t => t.completed);
     const completedTasksCount = completedTasksList.length;
     const completionRate = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0;
     
-    // Calculate hours
+    // Tính toán tổng số phút (thực tế và dự kiến)
     const expectedMinutes = tasks.reduce((acc, t) => acc + t.duration, 0);
     const actualMinutes = tasks.reduce((acc, t) => {
         if (t.actualDuration) return acc + t.actualDuration;
@@ -24,12 +22,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         return acc;
     }, 0);
 
+    // Hàm định dạng số phút thành chuỗi giờ và phút
     const formatHours = (mins: number) => {
         const h = Math.floor(mins / 60);
         const m = mins % 60;
         return h > 0 ? `${h}h${m > 0 ? ` ${m}p` : ''}` : `${m}p`;
     };
     
+    // Khởi tạo đối tượng lưu trữ tổng số phút cho từng danh mục
     const categoryMinutes: Record<string, number> = {
         study: 0,
         project: 0,
@@ -37,7 +37,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         break: 0
     };
 
-    // Cộng dồn thời gian (tính bằng phút) cho từng nhóm
+    // Cộng dồn thời gian (phút) cho mỗi danh mục
     tasks.forEach(task => {
         const taskMins = task.actualDuration || task.duration || 0;
         if (task.category && categoryMinutes[task.category] !== undefined) {
@@ -45,7 +45,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         }
     });
 
-    // Chia 60 để ra số Giờ (h), giữ lại 1 số thập phân
+    // Chuyển đổi phút sang giờ và làm tròn một chữ số thập phân cho dữ liệu biểu đồ
     const categoryData = [
         { name: 'Học tập', value: Number((categoryMinutes.study / 60).toFixed(1)) },
         { name: 'Dự án', value: Number((categoryMinutes.project / 60).toFixed(1)) },
@@ -53,13 +53,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         { name: 'Nghỉ ngơi', value: Number((categoryMinutes.break / 60).toFixed(1)) },
     ].filter(d => d.value > 0);
 
-    const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#6B7280'];
+    const COLORS = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#6B7280'];
 
+    // Chuẩn bị dữ liệu cho biểu đồ tiến độ dự án
     const projectData = projects.map(p => ({
         name: p.name,
         progress: p.progress
     }));
 
+    // Hiển thị trạng thái trống cho người dùng mới
     if (tasks.length === 0 && projects.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
@@ -85,8 +87,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                 </p>
             </header>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Các thẻ thống kê (Đã chuyển thành grid 2 cột) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Thẻ giờ học */}
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
                     <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-full">
                         <Clock className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -100,21 +103,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                     </div>
                 </div>
 
-                <div 
-                    onClick={() => setShowTasksModal(true)}
-                    className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow group"
-                >
-                    <div className="p-3 bg-green-50 dark:bg-green-900/30 rounded-full">
-                        <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-400" />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-indigo-500 flex items-center gap-1">
-                            Nhiệm vụ hoàn thành <List className="w-3 h-3"/>
-                        </p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{completedTasksCount}/{tasks.length}</h3>
-                    </div>
-                </div>
-
+                {/* Thẻ dự án đang chạy */}
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
                     <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded-full">
                         <AlertCircle className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -126,9 +115,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                 </div>
             </div>
 
-            {/* Charts Area */}
+            {/* Khu vực biểu đồ */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Distribution Chart */}
+                {/* Biểu đồ phân bổ thời gian */}
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Phân bổ thời gian (Theo Giờ)</h3>
                     <div className="h-64">
@@ -144,13 +133,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                                         fill="#8884d8"
                                         paddingAngle={5}
                                         dataKey="value"
-                                        label={({ value }) => `${value}h`} // HIỆN CHỮ 'h' BÊN NGOÀI MIẾNG BÁNH
+                                        label={({ value }) => `${value}h`}
                                     >
                                         {categoryData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    {/* HIỆN CHỮ 'h' KHI DI CHUỘT VÀO */}
+                                    {/* Công cụ chú giải (Tooltip) */}
                                     <Tooltip 
                                         formatter={(value: any) => [`${value}h`, 'Thời lượng']}
                                         contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff', borderRadius: '8px'}} 
@@ -164,6 +153,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                             </div>
                         )}
                     </div>
+                    {/* Chú giải màu sắc */}
                     <div className="flex flex-wrap gap-4 justify-center mt-2">
                         {categoryData.map((entry, index) => (
                             <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
@@ -174,7 +164,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                     </div>
                 </div>
 
-                {/* Project Progress Chart */}
+                {/* Biểu đồ tiến độ dự án */}
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tiến độ dự án</h3>
                     <div className="h-64">
@@ -198,39 +188,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                                 Chưa có dự án nào
                             </div>
                         )}
-                       
                     </div>
                 </div>
             </div>
-
-            {/* Completed Tasks Modal */}
-            {showTasksModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowTasksModal(false)}>
-                    <div className="bg-white dark:bg-[#28292c] w-full max-w-md rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-4">
-                            <h3 className="text-lg font-bold dark:text-white">Nhiệm vụ đã hoàn thành</h3>
-                            <button onClick={() => setShowTasksModal(false)}><X className="w-6 h-6 text-gray-500" /></button>
-                        </div>
-                        <div className="max-h-[60vh] overflow-y-auto">
-                            {completedTasksList.length > 0 ? (
-                                <ul className="space-y-3">
-                                    {completedTasksList.map(t => (
-                                        <li key={t.id} className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                                            <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                            <div>
-                                                <p className="font-medium text-gray-900 dark:text-white">{t.title}</p>
-                                                <p className="text-xs text-gray-500">{t.duration} phút</p>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-center text-gray-500 py-4">Chưa có nhiệm vụ nào hoàn thành.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

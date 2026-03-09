@@ -1,74 +1,94 @@
 import { ForumPost, ForumComment } from '../types';
-import { db } from '../firebaseConfig'; 
-import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, arrayRemove, query, orderBy, getDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+import { collection, getDocs, addDoc, updateDoc, doc, query, orderBy, getDoc } from 'firebase/firestore';
+
+// Tên của bảng dữ liệu trên Firebase (bạn có thể đổi tên nếu muốn)
+const COLLECTION_NAME = 'forum_posts';
 
 export const forumService = {
-    // 1. Lấy danh sách bài đăng từ Firebase
+    // 1. LẤY DANH SÁCH BÀI VIẾT TỪ FIREBASE
     getPosts: async (): Promise<ForumPost[]> => {
         try {
-            const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
+            // Lấy tất cả bài viết, sắp xếp theo thời gian mới nhất lên đầu
+            const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
             
-            const posts: ForumPost[] = [];
-            querySnapshot.forEach((document) => {
-                posts.push({ id: document.id, ...document.data() } as ForumPost);
-            });
+            // Chuyển đổi dữ liệu từ Firebase thành mảng ForumPost
+            const posts = snapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data() 
+            } as ForumPost));
+            
             return posts;
         } catch (error) {
-            console.error("Lỗi tải bài đăng từ Firebase:", error);
+            console.error("Lỗi khi tải bài viết:", error);
             return [];
         }
     },
 
-    // 2. Tạo bài đăng mới lên Firebase
-    createPost: async (post: ForumPost) => {
+    // 2. TẠO BÀI VIẾT MỚI LÊN FIREBASE
+    createPost: async (post: ForumPost): Promise<ForumPost> => {
         try {
-            const { id, ...postData } = post; 
-            const docRef = await addDoc(collection(db, 'posts'), postData);
+            // Xóa id tạm thời vì Firebase sẽ tự động tạo một ID độc nhất
+            const { id, ...postDataToSave } = post;
+            
+            const docRef = await addDoc(collection(db, COLLECTION_NAME), postDataToSave);
+            
+            // Trả về bài viết kèm theo ID thật mà Firebase vừa cấp
             return { ...post, id: docRef.id };
         } catch (error) {
-            console.error("Lỗi tạo bài đăng:", error);
-            return post;
+            console.error("Lỗi khi tạo bài viết mới:", error);
+            throw error;
         }
     },
 
-    // 3. XÓA BÀI ĐĂNG (TÍNH NĂNG MỚI)
-    deletePost: async (postId: string) => {
+    // 3. THÊM BÌNH LUẬN VÀO BÀI VIẾT
+    addComment: async (postId: string, comment: ForumComment): Promise<void> => {
         try {
-            await deleteDoc(doc(db, 'posts', postId));
-        } catch (error) {
-            console.error("Lỗi xóa bài đăng:", error);
-        }
-    },
-
-    // 4. Thêm bình luận vào Firebase
-    addComment: async (postId: string, comment: ForumComment) => {
-        try {
-            const postRef = doc(db, 'posts', postId);
-            await updateDoc(postRef, {
-                comments: arrayUnion(comment)
-            });
-        } catch (error) {
-            console.error("Lỗi thêm bình luận:", error);
-        }
-    },
-
-    // 5. Thả tim (Like) trên Firebase
-    toggleLike: async (postId: string, username: string) => {
-        try {
-            const postRef = doc(db, 'posts', postId);
+            const postRef = doc(db, COLLECTION_NAME, postId);
             const postSnap = await getDoc(postRef);
-            
+
             if (postSnap.exists()) {
-                const currentLikes = postSnap.data().likes || [];
-                if (currentLikes.includes(username)) {
-                    await updateDoc(postRef, { likes: arrayRemove(username) });
-                } else {
-                    await updateDoc(postRef, { likes: arrayUnion(username) });
-                }
+                const postData = postSnap.data() as ForumPost;
+                const currentComments = postData.comments || [];
+                
+                // Cập nhật lại mảng comments trên Firebase
+                await updateDoc(postRef, {
+                    comments: [...currentComments, comment]
+                });
             }
         } catch (error) {
-            console.error("Lỗi thả tim:", error);
+            console.error("Lỗi khi thêm bình luận:", error);
+            throw error;
+        }
+    },
+
+    // 4. THẢ TIM / BỎ THẢ TIM (LIKE)
+    toggleLike: async (postId: string, username: string): Promise<void> => {
+        try {
+            const postRef = doc(db, COLLECTION_NAME, postId);
+            const postSnap = await getDoc(postRef);
+
+            if (postSnap.exists()) {
+                const postData = postSnap.data() as ForumPost;
+                const currentLikes = postData.likes || [];
+                
+                // Kiểm tra xem user này đã like chưa
+                const hasLiked = currentLikes.includes(username);
+                
+                // Nếu like rồi thì lọc ra (bỏ like), nếu chưa thì thêm vào
+                const newLikes = hasLiked 
+                    ? currentLikes.filter(u => u !== username) 
+                    : [...currentLikes, username];
+                
+                // Cập nhật mảng likes mới lên Firebase
+                await updateDoc(postRef, {
+                    likes: newLikes
+                });
+            }
+        } catch (error) {
+            console.error("Lỗi khi cập nhật lượt thích:", error);
+            throw error;
         }
     }
 };

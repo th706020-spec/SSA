@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { User } from '../types';
-import { GraduationCap, UserPlus, LogIn, Users } from 'lucide-react';
+import { GraduationCap, UserPlus, LogIn, Users, Loader2 } from 'lucide-react';
 import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getCountFromServer } from 'firebase/firestore';
 
 interface AuthProps {
-    onLogin: (user: User) => void;
+    onLogin: (user: User, isRegister?: boolean) => void;
 }
 
 export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
@@ -15,67 +15,65 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [userCount, setUserCount] = useState(0);
-    const [isLoading, setIsLoading] = useState(false); // Thêm trạng thái loading để UX mượt hơn
+    const [isLoading, setIsLoading] = useState(false); // Trạng thái chờ xử lý
 
-    // Real-time update logic (Kéo từ Firebase)
+    // Đếm số lượng sinh viên từ cơ sở dữ liệu đám mây
     useEffect(() => {
         const fetchUserCount = async () => {
             try {
-                // Quét số lượng documents trong collection 'users'
-                const querySnapshot = await getDocs(collection(db, 'users'));
-                setUserCount(querySnapshot.size);
+                const coll = collection(db, 'users');
+                const snapshot = await getCountFromServer(coll);
+                setUserCount(snapshot.data().count);
             } catch (err) {
-                console.error("Lỗi đếm số user từ Firebase:", err);
+                console.error("Lỗi đếm số lượng tài khoản hệ thống:", err);
             }
         };
 
         fetchUserCount();
-        
-        // Quét lại mỗi 10 giây để cập nhật số lượng (Thay vì 2s như trước để tránh quá tải Firebase)
-        const interval = setInterval(fetchUserCount, 10000);
-
-        return () => {
-            clearInterval(interval);
-        };
     }, []);
 
-    // Sửa thành hàm async vì authService giờ đã gọi lên mây
+    // THÊM ASYNC VÀO ĐÂY ĐỂ CHỜ HỆ THỐNG PHẢN HỒI
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setIsLoading(true); // Bật hiệu ứng loading
 
         const cleanUsername = username.trim();
         const cleanPassword = password.trim();
 
         if (!cleanUsername || !cleanPassword) {
             setError('Vui lòng điền đầy đủ thông tin');
-            setIsLoading(false);
             return;
         }
 
-        if (isLogin) {
-            // Đợi Firebase trả kết quả đăng nhập
-            const user = await authService.login(cleanUsername, cleanPassword);
-            if (user) {
-                onLogin(user);
-            } else {
-                setError('Tên đăng nhập hoặc mật khẩu không đúng');
-            }
-        } else {
-            // Đợi Firebase trả kết quả đăng ký
-            const success = await authService.register(cleanUsername, cleanPassword);
-            if (success) {
-                setUserCount(prev => prev + 1);
-                // Auto login after register
+        setIsLoading(true); // Bật hiệu ứng đang tải
+
+        try {
+            if (isLogin) {
+                // Thêm AWAIT để đợi đăng nhập
                 const user = await authService.login(cleanUsername, cleanPassword);
-                if (user) onLogin(user);
+                if (user) {
+                    onLogin(user, false);
+                } else {
+                    setError('Tên đăng nhập hoặc mật khẩu không đúng');
+                }
             } else {
-                setError('Tên đăng nhập đã tồn tại');
+                // Thêm AWAIT để đợi đăng ký
+                const success = await authService.register(cleanUsername, cleanPassword);
+                if (success) {
+                    setUserCount(prev => prev + 1); // Cập nhật số lượng liền cho đẹp
+                    // Đăng ký xong thì tự động đăng nhập
+                    const user = await authService.login(cleanUsername, cleanPassword);
+                    if (user) onLogin(user, true);
+                } else {
+                    setError('Tên đăng nhập đã tồn tại, vui lòng chọn tên khác');
+                }
             }
+        } catch (err) {
+            setError('Có lỗi kết nối đến hệ thống, vui lòng thử lại sau');
+            console.error(err);
+        } finally {
+            setIsLoading(false); // Tắt hiệu ứng tải
         }
-        
-        setIsLoading(false); // Tắt hiệu ứng loading
     };
 
     return (
@@ -117,9 +115,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                            placeholder="Nhập tên đăng nhập..."
                             disabled={isLoading}
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all disabled:opacity-50"
+                            placeholder="Nhập tên đăng nhập..."
                         />
                     </div>
 
@@ -129,19 +127,19 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                            placeholder="Nhập mật khẩu..."
                             disabled={isLoading}
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all disabled:opacity-50"
+                            placeholder="Nhập mật khẩu..."
                         />
                     </div>
 
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isLoading ? (
-                            <span className="animate-pulse">Đang xử lý...</span>
+                            <> <Loader2 className="w-5 h-5 animate-spin" /> Đang xử lý... </>
                         ) : isLogin ? (
                             <> <LogIn className="w-5 h-5"/> Đăng nhập </>
                         ) : (
@@ -152,9 +150,10 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
                 <div className="mt-6 text-center">
                     <button
-                        onClick={() => { setIsLogin(!isLogin); setError(''); setUsername(''); setPassword(''); }}
-                        className="text-indigo-600 font-medium hover:underline text-sm"
+                        type="button"
                         disabled={isLoading}
+                        onClick={() => { setIsLogin(!isLogin); setError(''); setUsername(''); setPassword(''); }}
+                        className="text-indigo-600 font-medium hover:underline text-sm disabled:opacity-50 disabled:no-underline"
                     >
                         {isLogin ? 'Chưa có tài khoản? Đăng ký ngay' : 'Đã có tài khoản? Đăng nhập'}
                     </button>

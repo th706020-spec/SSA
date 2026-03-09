@@ -1,18 +1,20 @@
 import { User, Task, Project, StudentProfile, Note } from '../types';
 import { db } from '../firebaseConfig';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 const CURRENT_USER_KEY = 'smartstudy_current_user';
-const LOCAL_USER_DATA = 'smartstudy_local_data';
+const COLLECTION_NAME = 'users';
 
 export const authService = {
-    // 1. Đăng ký (Đẩy thẳng lên Firebase)
+    // 1. TẠO TÀI KHOẢN MỚI
     register: async (username: string, password: string): Promise<boolean> => {
         try {
-            const userRef = doc(db, 'users', username);
-            const docSnap = await getDoc(userRef);
+            const userRef = doc(db, COLLECTION_NAME, username);
+            const userSnap = await getDoc(userRef);
 
-            if (docSnap.exists()) return false; // Tài khoản đã tồn tại
+            if (userSnap.exists()) {
+                return false; 
+            }
 
             const newUser: User = {
                 username,
@@ -30,54 +32,47 @@ export const authService = {
                 }
             };
 
-            // Lưu lên Firebase
             await setDoc(userRef, newUser);
             return true;
         } catch (error) {
-            console.error("Lỗi đăng ký Firebase:", error);
+            console.error("Lỗi tạo tài khoản hệ thống:", error);
             return false;
         }
     },
 
-    // 2. Đăng nhập (Kiểm tra dữ liệu từ Firebase)
+    // 2. ĐĂNG NHẬP
     login: async (username: string, password: string): Promise<User | null> => {
         try {
-            const userRef = doc(db, 'users', username);
-            const docSnap = await getDoc(userRef);
+            const userRef = doc(db, COLLECTION_NAME, username);
+            const userSnap = await getDoc(userRef);
 
-            if (docSnap.exists()) {
-                const user = docSnap.data() as User;
-                if (user.password === password) {
-                    // Lưu cắm chốt ở máy để lần sau load cho nhanh
-                    localStorage.setItem(CURRENT_USER_KEY, username);
-                    localStorage.setItem(LOCAL_USER_DATA, JSON.stringify(user));
-                    return user;
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as User;
+                if (userData.password === password) {
+                    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userData));
+                    return userData;
                 }
             }
             return null;
         } catch (error) {
-            console.error("Lỗi đăng nhập Firebase:", error);
+            console.error("Lỗi xác thực đăng nhập:", error);
             return null;
         }
     },
 
-    // 3. Đăng xuất
+    // 3. ĐĂNG XUẤT
     logout: () => {
         localStorage.removeItem(CURRENT_USER_KEY);
-        localStorage.removeItem(LOCAL_USER_DATA);
     },
 
-    // 4. Lấy dữ liệu người dùng ngay lập tức (Để giao diện không bị giật)
+    // 4. LẤY THÔNG TIN USER (Local)
     getCurrentUser: (): User | null => {
-        const username = localStorage.getItem(CURRENT_USER_KEY);
-        const userDataString = localStorage.getItem(LOCAL_USER_DATA);
-        
-        if (!username || !userDataString) return null;
-        return JSON.parse(userDataString) as User;
+        const data = localStorage.getItem(CURRENT_USER_KEY);
+        return data ? JSON.parse(data) : null;
     },
 
-    // 5. Cập nhật dữ liệu (Lưu ở máy trước, đẩy lên mây chạy ngầm)
-    updateUserData: (
+    // 5. ĐỒNG BỘ DỮ LIỆU
+    updateUserData: async (
         tasks?: Task[], 
         projects?: Project[], 
         profile?: StudentProfile | null,
@@ -85,25 +80,30 @@ export const authService = {
         settings?: User['settings'],
         avatar?: string
     ) => {
-        const username = localStorage.getItem(CURRENT_USER_KEY);
-        const userDataString = localStorage.getItem(LOCAL_USER_DATA);
-        
-        if (!username || !userDataString) return;
+        try {
+            const currentUserString = localStorage.getItem(CURRENT_USER_KEY);
+            if (!currentUserString) return;
 
-        const currentUser = JSON.parse(userDataString) as User;
+            const currentUser: User = JSON.parse(currentUserString);
 
-        // Cập nhật vào bản nháp local
-        if (tasks !== undefined) currentUser.data.tasks = tasks;
-        if (projects !== undefined) currentUser.data.projects = projects;
-        if (profile !== undefined) currentUser.data.profile = profile;
-        if (notes !== undefined) currentUser.data.notes = notes;
-        if (settings !== undefined) currentUser.settings = settings;
-        if (avatar !== undefined) currentUser.avatar = avatar;
+            if (tasks !== undefined) currentUser.data.tasks = tasks;
+            if (projects !== undefined) currentUser.data.projects = projects;
+            if (profile !== undefined) currentUser.data.profile = profile;
+            if (notes !== undefined) currentUser.data.notes = notes;
+            if (settings !== undefined) currentUser.settings = settings;
+            if (avatar !== undefined) currentUser.avatar = avatar;
 
-        localStorage.setItem(LOCAL_USER_DATA, JSON.stringify(currentUser));
+            localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
 
-        // CHẠY NGẦM: Bắn dữ liệu lên Firebase
-        setDoc(doc(db, 'users', username), currentUser, { merge: true })
-            .catch(err => console.error("Lỗi đồng bộ ngầm lên Firebase:", err));
+            const userRef = doc(db, COLLECTION_NAME, currentUser.username);
+            await updateDoc(userRef, {
+                avatar: currentUser.avatar,
+                settings: currentUser.settings,
+                data: currentUser.data
+            });
+
+        } catch (error) {
+            console.error("Lỗi đồng bộ dữ liệu người dùng:", error);
+        }
     }
 };

@@ -6,6 +6,7 @@ import { ProjectTracker } from './components/ProjectTracker';
 import { OnboardingSSR } from './components/OnboardingSSR';
 import { SSRProfile } from './components/SSRProfile';
 import { PomodoroTimer } from './components/PomodoroTimer';
+import { SmartNotes } from './components/SmartNotes';
 import { UserProfile } from './components/UserProfile';
 import { CommunityForum } from './components/CommunityForum';
 import { AppTrends } from './components/AppTrends';
@@ -54,16 +55,21 @@ const App: React.FC = () => {
         return u;
     };
 
-    const handleLogin = (loggedInUser: User) => {
+    const handleLogin = (loggedInUser: User, isRegister?: boolean) => {
         const sanitized = sanitizeUser(loggedInUser);
         setUser(sanitized);
+        if (isRegister) {
+            setCurrentView(ViewState.PROFILE);
+        } else {
+            setCurrentView(ViewState.DASHBOARD);
+        }
     };
 
     // Initialize from LocalStorage (Auto Login)
     useEffect(() => {
         const savedUser = authService.getCurrentUser();
         if (savedUser) {
-            handleLogin(savedUser);
+            handleLogin(savedUser, false);
         } else {
             // Only confirm logout if no user is found
             authService.logout();
@@ -131,18 +137,8 @@ const App: React.FC = () => {
     const handleTimerComplete = () => {
         // Play sound if possible (browsers might block it without user interaction)
         try {
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
-            gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-            oscillator.start(ctx.currentTime);
-            oscillator.stop(ctx.currentTime + 0.5);
+            const audio = new Audio('https://tiengdong.com/wp-content/uploads/Nhac-chuong-tin-nhan-nokia-www_tiengdong_com.mp3');
+            audio.play().catch(e => console.error("Audio play blocked", e));
         } catch (e) {
             console.error("Audio play failed", e);
         }
@@ -251,6 +247,8 @@ const App: React.FC = () => {
                 />;
             case ViewState.PROJECTS:
                 return <ProjectTracker projects={user.data.projects} setProjects={handleProjectsUpdate} />;
+            case ViewState.NOTES:
+                return <SmartNotes notes={user.data.notes || []} setNotes={handleNotesUpdate} />;
             case ViewState.FORUM:
                 return <CommunityForum currentUser={user} />;
             case ViewState.TRENDS:

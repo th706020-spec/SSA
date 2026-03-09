@@ -40,6 +40,10 @@ const MODES: Record<PomodoroMode, { label: string; minutes: number; colorFrom: s
 export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, projects, pomodoroState, setPomodoroState }) => {
     const { mode, timeLeft, isActive, selectedTaskId, autoSync } = pomodoroState;
 
+    const setAutoSync = (value: boolean) => {
+        setPomodoroState(prev => ({ ...prev, autoSync: value }));
+    };
+
     // Helper to get local date YYYY-MM-DD
     const getTodayString = () => {
         const d = new Date();

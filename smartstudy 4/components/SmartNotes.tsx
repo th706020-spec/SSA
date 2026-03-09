@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
 
 interface SmartNotesProps {
-    currentUser: User;
+    currentUser: User | null; // Cho phép null để chống sập
 }
 
 const QUOTES = [
@@ -16,12 +16,16 @@ const QUOTES = [
 ];
 
 export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
+    // CHỐNG SẬP 1: Nếu chưa load kịp User thì báo tải, thay vì sập web
+    if (!currentUser || !currentUser.username) {
+        return <div className="flex h-full items-center justify-center text-gray-500 font-medium animate-pulse">Đang tải dữ liệu người dùng...</div>;
+    }
+
     const [notes, setNotes] = useState<Note[]>([]);
     const [selectedNote, setSelectedNote] = useState<Note | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [isAutoSaving, setIsAutoSaving] = useState(false);
 
-    // 1. Tải danh sách ghi chú từ Firebase
     useEffect(() => {
         const fetchNotes = async () => {
             try {
@@ -43,7 +47,6 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         fetchNotes();
     }, [currentUser.username]);
 
-    // 2. Tự động đồng bộ lên Firebase (An toàn, không lỗi ngầm)
     useEffect(() => {
         if (!selectedNote || !selectedNote.id) return;
 
@@ -53,9 +56,8 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                 const noteRef = doc(db, 'notes', selectedNote.id);
                 const { id, ...dataToSave } = selectedNote; 
                 
-                // Lọc bỏ undefined để Firebase chấp nhận dữ liệu
                 const cleanData = Object.fromEntries(
-                    Object.entries(dataToSave).filter(([_, value]) => value !== undefined)
+                    Object.entries(dataToSave).filter(([_, value]) => value !== undefined && value !== null)
                 );
 
                 const finalDataToUpdate = {
@@ -75,7 +77,6 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         return () => clearTimeout(timer);
     }, [selectedNote]);
 
-    // 3. Tạo ghi chú mới
     const handleCreateNote = async (type: 'text' | 'checklist') => {
         const now = new Date().toISOString();
         const newNoteData = {
@@ -110,7 +111,6 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         }
     };
 
-    // 4. Các hàm xử lý Checklist
     const handleChecklistItem = (index: number, val: string) => {
         if (!selectedNote || !selectedNote.items) return;
         const newItems = [...selectedNote.items];
@@ -131,14 +131,24 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
         setSelectedNote({ ...selectedNote, items: newItems, updatedAt: new Date().toISOString() });
     };
 
-    const filteredNotes = notes.filter(n => 
-        (n.title?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-        (n.content?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    );
+    // CHỐNG SẬP 2: Lọc dữ liệu an toàn, chặn hoàn toàn lỗi toLowerCase() của biến undefined
+    const filteredNotes = notes.filter(n => {
+        const safeTitle = n?.title || '';
+        const safeContent = n?.content || '';
+        const safeSearch = searchTerm || '';
+        return safeTitle.toLowerCase().includes(safeSearch.toLowerCase()) || 
+               safeContent.toLowerCase().includes(safeSearch.toLowerCase());
+    });
+
+    // Hàm render ngày tháng an toàn
+    const renderDate = (dateStr?: string) => {
+        if (!dateStr) return '';
+        try { return new Date(dateStr).toLocaleDateString('vi-VN'); }
+        catch { return ''; }
+    };
 
     return (
         <div className="flex h-[calc(100vh-100px)] gap-6 animate-in fade-in duration-300">
-            {/* Cột Danh Sách Bên Trái */}
             <div className="w-full md:w-80 flex flex-col gap-4">
                 <div className="flex items-center gap-2 bg-white dark:bg-[#1e1e2d] p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                     <Search className="w-5 h-5 text-gray-400" />
@@ -180,7 +190,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                                 {note.title || 'Chưa có tiêu đề'}
                             </h4>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex justify-between">
-                                <span>{new Date(note.updatedAt).toLocaleDateString('vi-VN')}</span>
+                                <span>{renderDate(note.updatedAt)}</span>
                                 {note.type === 'checklist' && <CheckSquare className="w-3 h-3" />}
                             </p>
                         </div>
@@ -188,7 +198,6 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                 </div>
             </div>
 
-            {/* Cột Soạn Thảo Bên Phải */}
             <div className="flex-1 bg-white dark:bg-[#1e1e2d] rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden relative">
                 {selectedNote ? (
                     <>
@@ -223,7 +232,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                                             </button>
                                             <input 
                                                 type="text" 
-                                                value={item.text}
+                                                value={item.text || ''}
                                                 onChange={(e) => handleChecklistItem(idx, e.target.value)}
                                                 placeholder="Việc cần làm..."
                                                 className={`flex-1 bg-transparent outline-none transition-all ${item.done ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-gray-200'}`}
@@ -259,7 +268,7 @@ export const SmartNotes: React.FC<SmartNotesProps> = ({ currentUser }) => {
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                         <LayoutGrid className="w-16 h-16 mb-4 opacity-50" />
-                        <p className="text-lg font-medium">Chọn một ghi chú để xem</p>
+                        <p className="text-lg font-medium">Chọn một ghi chú để bắt đầu</p>
                     </div>
                 )}
             </div>

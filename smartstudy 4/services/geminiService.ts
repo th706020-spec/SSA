@@ -3,7 +3,8 @@ import { RemediationPlan, Task, PhoneUsageSurvey, SSRAnalysis } from "../types";
 
 // Initialize Gemini Client
 // WARNING: In a real production app, never expose API keys on the client side.
-const apiKey = process.env.API_KEY || '';
+// ĐÃ SỬA: Chuyển sang dùng import.meta.env chuẩn của Vite
+const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 const MODEL_NAME = 'gemini-3-flash-preview';

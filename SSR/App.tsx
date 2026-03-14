@@ -6,7 +6,6 @@ import { ProjectTracker } from './components/ProjectTracker';
 import { OnboardingSSR } from './components/OnboardingSSR';
 import { SSRProfile } from './components/SSRProfile';
 import { PomodoroTimer } from './components/PomodoroTimer';
-import { SmartNotes } from './components/SmartNotes';
 import { UserProfile } from './components/UserProfile';
 import { CommunityForum } from './components/CommunityForum';
 import { AppTrends } from './components/AppTrends';
@@ -47,10 +46,9 @@ const App: React.FC = () => {
         autoSync: true
     });
 
-    // Helper to sanitize user data
+    // Helper to sanitize user data (ensure new fields exist)
     const sanitizeUser = (rawUser: User): User => {
         const u = { ...rawUser };
-        if (!u.data.notes) u.data.notes = [];
         if (!u.settings) u.settings = { notifications: true, soundEnabled: true };
         return u;
     };
@@ -58,18 +56,20 @@ const App: React.FC = () => {
     const handleLogin = (loggedInUser: User, isRegister?: boolean) => {
         const sanitized = sanitizeUser(loggedInUser);
         setUser(sanitized);
-        
-        // Đăng nhập hay đăng ký đều đưa về trang chủ. 
-        // Nếu chưa có profile, giao diện sẽ tự động hiển thị màn hình Khảo sát
-        setCurrentView(ViewState.DASHBOARD);
+        if (isRegister) {
+            setCurrentView(ViewState.PROFILE);
+        } else {
+            setCurrentView(ViewState.DASHBOARD);
+        }
     };
 
-    // Initialize from LocalStorage
+    // Initialize from LocalStorage (Auto Login)
     useEffect(() => {
         const savedUser = authService.getCurrentUser();
         if (savedUser) {
             handleLogin(savedUser, false);
         } else {
+            // Only confirm logout if no user is found
             authService.logout();
             setUser(null);
         }
@@ -104,6 +104,7 @@ const App: React.FC = () => {
 
     const handleUserUpdate = (updatedUser: User) => {
         setUser(updatedUser);
+        // Persistence handled inside UserProfile component via authService but state needs update
     };
 
     // Pomodoro Timer Logic
@@ -122,9 +123,10 @@ const App: React.FC = () => {
             }, 200);
         }
         return () => { if (interval) clearInterval(interval); };
-    }, [pomodoroState.isActive, pomodoroState.endTime, user]);
+    }, [pomodoroState.isActive, pomodoroState.endTime, user]); // Added user to deps
 
     const handleTimerComplete = () => {
+        // Play sound if possible (browsers might block it without user interaction)
         try {
             const audio = new Audio('https://tiengdong.com/wp-content/uploads/Nhac-chuong-tin-nhan-nokia-www_tiengdong_com.mp3');
             audio.play().catch(e => console.error("Audio play blocked", e));
@@ -138,6 +140,7 @@ const App: React.FC = () => {
             const newTimeLeft = (newMode === 'focus' ? 25 : 5) * 60;
             const newEndTime = Date.now() + newTimeLeft * 1000;
 
+            // Update task actualDuration if it was a focus session
             if (isFocus && prev.selectedTaskId && user) {
                 const isTask = user.data.tasks.some(t => t.id === prev.selectedTaskId);
                 if (isTask) {
@@ -156,7 +159,7 @@ const App: React.FC = () => {
                 mode: newMode,
                 timeLeft: newTimeLeft,
                 endTime: newEndTime,
-                isActive: true
+                isActive: true // Auto loop
             };
         });
     };
@@ -203,10 +206,12 @@ const App: React.FC = () => {
         setIsDarkMode(!isDarkMode);
     };
 
+    // 1. Not Logged In -> Show Auth
     if (!user) {
         return <Auth onLogin={handleLogin} />;
     }
 
+    // 2. Logged In but No Profile -> Show Onboarding
     if (!user.data.profile) {
         return (
             <OnboardingSSR 
@@ -215,6 +220,7 @@ const App: React.FC = () => {
         );
     }
 
+    // 3. Main App
     const renderView = () => {
         switch (currentView) {
             case ViewState.DASHBOARD:
@@ -232,8 +238,6 @@ const App: React.FC = () => {
                 />;
             case ViewState.PROJECTS:
                 return <ProjectTracker projects={user.data.projects} setProjects={handleProjectsUpdate} />;
-            case ViewState.NOTES:
-                return <SmartNotes currentUser={user} />;
             case ViewState.FORUM:
                 return <CommunityForum currentUser={user} />;
             case ViewState.TRENDS:

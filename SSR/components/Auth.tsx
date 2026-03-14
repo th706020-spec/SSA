@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { User } from '../types';
-import { GraduationCap, UserPlus, LogIn, Users, Loader2 } from 'lucide-react';
-import { db } from '../firebaseConfig';
-import { collection, getCountFromServer } from 'firebase/firestore';
+import { GraduationCap, ArrowRight, UserPlus, LogIn, Users } from 'lucide-react';
 
 interface AuthProps {
     onLogin: (user: User, isRegister?: boolean) => void;
@@ -15,24 +13,19 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [userCount, setUserCount] = useState(0);
-    const [isLoading, setIsLoading] = useState(false); // Trạng thái chờ xử lý
 
-    // Đếm số lượng sinh viên từ cơ sở dữ liệu đám mây
+    // Lưu ý: Logic lấy tổng số user trực tiếp trên Firebase đòi hỏi truy vấn toàn bộ collection 'users'.
+    // Việc này có thể tốn kém nếu số lượng user lớn. Ở đây mình giữ lại logic mô phỏng (hoặc lấy từ local nếu bạn có lưu).
+    // Nếu muốn hiển thị chính xác, bạn cần viết thêm hàm trong authService để lấy số lượng từ Firestore.
+    // Hiện tại mình vô hiệu hóa phần đếm thực tế để tránh lỗi.
     useEffect(() => {
-        const fetchUserCount = async () => {
-            try {
-                const coll = collection(db, 'users');
-                const snapshot = await getCountFromServer(coll);
-                setUserCount(snapshot.data().count);
-            } catch (err) {
-                console.error("Lỗi đếm số lượng tài khoản hệ thống:", err);
-            }
-        };
-
-        fetchUserCount();
+        // const fetchUserCount = () => {
+        //     // Logic lấy số lượng user từ Firebase sẽ phức tạp hơn.
+        //     setUserCount(0); 
+        // };
+        // fetchUserCount();
     }, []);
 
-    // THÊM ASYNC VÀO ĐÂY ĐỂ CHỜ HỆ THỐNG PHẢN HỒI
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -45,34 +38,24 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             return;
         }
 
-        setIsLoading(true); // Bật hiệu ứng đang tải
-
-        try {
-            if (isLogin) {
-                // Thêm AWAIT để đợi đăng nhập
-                const user = await authService.login(cleanUsername, cleanPassword);
-                if (user) {
-                    onLogin(user, false);
-                } else {
-                    setError('Tên đăng nhập hoặc mật khẩu không đúng');
-                }
+        if (isLogin) {
+            // Thêm await để đợi Firebase phản hồi
+            const user = await authService.login(cleanUsername, cleanPassword);
+            if (user) {
+                onLogin(user, false);
             } else {
-                // Thêm AWAIT để đợi đăng ký
-                const success = await authService.register(cleanUsername, cleanPassword);
-                if (success) {
-                    setUserCount(prev => prev + 1); // Cập nhật số lượng liền cho đẹp
-                    // Đăng ký xong thì tự động đăng nhập
-                    const user = await authService.login(cleanUsername, cleanPassword);
-                    if (user) onLogin(user, true);
-                } else {
-                    setError('Tên đăng nhập đã tồn tại, vui lòng chọn tên khác');
-                }
+                setError('Tên đăng nhập hoặc mật khẩu không đúng');
             }
-        } catch (err) {
-            setError('Có lỗi kết nối đến hệ thống, vui lòng thử lại sau');
-            console.error(err);
-        } finally {
-            setIsLoading(false); // Tắt hiệu ứng tải
+        } else {
+            // Thêm await
+            const success = await authService.register(cleanUsername, cleanPassword);
+            if (success) {
+                // Auto login sau khi đăng ký thành công
+                const user = await authService.login(cleanUsername, cleanPassword);
+                if (user) onLogin(user, true);
+            } else {
+                setError('Tên đăng nhập đã tồn tại hoặc lỗi mạng');
+            }
         }
     };
 
@@ -91,8 +74,8 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     <h1 className="text-2xl font-bold text-gray-900">SmartStudy Rhythm</h1>
                     <p className="text-gray-500 mt-2">Đăng nhập để bắt đầu hành trình học tập.</p>
                     
-                    {/* Live User Count Badge */}
-                    <div className="mt-4 inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-semibold animate-in fade-in duration-700">
+                    {/* Live User Count Badge (Đã vô hiệu hóa giá trị thực tế) */}
+                    {/* <div className="mt-4 inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-semibold animate-in fade-in duration-700">
                         <Users className="w-3.5 h-3.5" />
                         <span>{userCount} sinh viên đang sử dụng</span>
                         <span className="relative flex h-2 w-2 ml-1">
@@ -100,6 +83,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                         </span>
                     </div>
+                    */}
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -115,8 +99,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            disabled={isLoading}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all disabled:opacity-50"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             placeholder="Nhập tên đăng nhập..."
                         />
                     </div>
@@ -127,20 +110,16 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            disabled={isLoading}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all disabled:opacity-50"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             placeholder="Nhập mật khẩu..."
                         />
                     </div>
 
                     <button
                         type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2"
                     >
-                        {isLoading ? (
-                            <> <Loader2 className="w-5 h-5 animate-spin" /> Đang xử lý... </>
-                        ) : isLogin ? (
+                        {isLogin ? (
                             <> <LogIn className="w-5 h-5"/> Đăng nhập </>
                         ) : (
                             <> <UserPlus className="w-5 h-5"/> Đăng ký </>
@@ -150,10 +129,8 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
                 <div className="mt-6 text-center">
                     <button
-                        type="button"
-                        disabled={isLoading}
                         onClick={() => { setIsLogin(!isLogin); setError(''); setUsername(''); setPassword(''); }}
-                        className="text-indigo-600 font-medium hover:underline text-sm disabled:opacity-50 disabled:no-underline"
+                        className="text-indigo-600 font-medium hover:underline text-sm"
                     >
                         {isLogin ? 'Chưa có tài khoản? Đăng ký ngay' : 'Đã có tài khoản? Đăng nhập'}
                     </button>

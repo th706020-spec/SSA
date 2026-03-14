@@ -1,10 +1,7 @@
-// Import đầy đủ các thư viện cần thiết từ Firebase
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore"; // THÊM DÒNG NÀY
 
-// Cấu hình chuẩn của dự án SmartStudyR
 const firebaseConfig = {
   apiKey: "AIzaSyBObHDAtogbX7DihvoBEDHS-1MNjwe0-20",
   authDomain: "smartstudyr-1f6c8.firebaseapp.com",
@@ -16,12 +13,6 @@ const firebaseConfig = {
   measurementId: "G-S3VF7M3TVZ"
 };
 
-// Khởi tạo các dịch vụ
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-// Xuất Auth và Database ra để các file khác sử dụng
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-
-export default app;
+export const app = initializeApp(firebaseConfig);
+export const analytics = getAnalytics(app);
+export const db = getFirestore(app); // THÊM DÒNG NÀY ĐỂ CÁC FILE KHÁC CÓ THỂ GỌI 'db'

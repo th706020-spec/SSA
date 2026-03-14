@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Feedback } from '../types';
+import { feedbackService } from '../services/feedbackService'; // Gọi "động cơ" Firebase vào
 import { Send, Bug, Lightbulb, MessageSquare, Trash2, CheckCircle } from 'lucide-react';
 
 interface AdminFeedbackProps {
@@ -12,38 +13,48 @@ export const AdminFeedback: React.FC<AdminFeedbackProps> = ({ currentUser }) => 
     const [content, setContent] = useState('');
     const [submitted, setSubmitted] = useState(false);
 
+    // Kéo dữ liệu từ Firebase khi mở trang
+    const loadFeedbacks = async () => {
+        const data = await feedbackService.getAllFeedbacks();
+        setFeedbacks(data);
+    };
+
     useEffect(() => {
-        const saved = localStorage.getItem('smartstudy_feedback');
-        if (saved) {
-            setFeedbacks(JSON.parse(saved));
-        }
+        loadFeedbacks();
     }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Xử lý Gửi góp ý lên mạng
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!content.trim()) return;
 
-        const newFeedback: Feedback = {
-            id: Date.now().toString(),
+        // Bỏ ID để Firebase tự cấp
+        const newFeedback = {
             user: currentUser.username,
             type,
             content,
             createdAt: new Date().toISOString()
         };
 
-        const updated = [newFeedback, ...feedbacks];
-        setFeedbacks(updated);
-        localStorage.setItem('smartstudy_feedback', JSON.stringify(updated));
+        const isSuccess = await feedbackService.sendFeedback(newFeedback as any);
         
-        setContent('');
-        setSubmitted(true);
-        setTimeout(() => setSubmitted(false), 3000);
+        if (isSuccess) {
+            await loadFeedbacks(); // Tải lại danh sách mới nhất
+            setContent('');
+            setSubmitted(true);
+            setTimeout(() => setSubmitted(false), 3000);
+        } else {
+            alert("Có lỗi kết nối mạng, vui lòng thử lại!");
+        }
     };
 
-    const handleDelete = (id: string) => {
-        const updated = feedbacks.filter(f => f.id !== id);
-        setFeedbacks(updated);
-        localStorage.setItem('smartstudy_feedback', JSON.stringify(updated));
+    // Xử lý Xóa góp ý khỏi mạng
+    const handleDelete = async (id: string | undefined) => {
+        if (!id) return;
+        const isSuccess = await feedbackService.deleteFeedback(id);
+        if (isSuccess) {
+            setFeedbacks(feedbacks.filter(f => f.id !== id)); // Xóa ngay trên màn hình cho mượt
+        }
     };
 
     const getTypeIcon = (t: string) => {

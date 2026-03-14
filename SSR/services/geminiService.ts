@@ -2,8 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { RemediationPlan, Task, PhoneUsageSurvey, SSRAnalysis } from "../types";
 
 // Initialize Gemini Client
-// WARNING: In a real production app, never expose API keys on the client side.
-// ĐÃ SỬA: Chuyển sang dùng import.meta.env chuẩn của Vite
+// ĐÃ SỬA: Ép kiểu as any để tắt lỗi đỏ và dùng đúng chuẩn của Vite
 const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 

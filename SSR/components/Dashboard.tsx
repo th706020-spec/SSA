@@ -30,12 +30,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
         return h > 0 ? `${h}h${m > 0 ? ` ${m}p` : ''}` : `${m}p`;
     };
     
+    const getCategoryTime = (category: string) => {
+        return tasks.filter(t => t.category === category).reduce((acc, t) => {
+            return acc + (t.actualDuration || t.duration || 0);
+        }, 0) / 60;
+    };
+
     // Data for charts
     const categoryData = [
-        { name: 'Học tập', value: tasks.filter(t => t.category === 'study').length },
-        { name: 'Dự án', value: tasks.filter(t => t.category === 'project').length },
-        { name: 'Ôn tập', value: tasks.filter(t => t.category === 'review').length },
-        { name: 'Nghỉ ngơi', value: tasks.filter(t => t.category === 'break').length },
+        { name: 'Học tập', value: Number(getCategoryTime('study').toFixed(1)) },
+        { name: 'Dự án', value: Number(getCategoryTime('project').toFixed(1)) },
+        { name: 'Ôn tập', value: Number(getCategoryTime('review').toFixed(1)) },
+        { name: 'Nghỉ ngơi', value: Number(getCategoryTime('break').toFixed(1)) },
     ].filter(d => d.value > 0);
 
     const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#6B7280'];
@@ -116,7 +122,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Distribution Chart */}
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Phân bổ thời gian</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Phân bổ thời gian (Giờ)</h3>
                     <div className="h-64">
                         {categoryData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -135,7 +141,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, projects }) => {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff'}} />
+                                    <Tooltip contentStyle={{backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff'}} formatter={(value: number) => [`${value} giờ`, 'Thời gian']} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (

@@ -5,26 +5,17 @@ export enum ViewState {
     POMODORO = 'POMODORO',
     PROJECTS = 'PROJECTS',
     SSR_PROFILE = 'SSR_PROFILE',
-    NOTES = 'NOTES',
     SETTINGS = 'SETTINGS',
     FORUM = 'FORUM',
     TRENDS = 'TRENDS',
     FEEDBACK = 'FEEDBACK'
 }
 
-export interface Feedback {
-    id: string;
-    user: string;
-    type: 'bug' | 'feature' | 'other';
-    content: string;
-    createdAt: string;
-}
-
 // User Interface
 export interface User {
     username: string;
     password?: string;
-    avatar?: string; // New: Avatar URL
+    avatar?: string;
     settings?: {
         notifications: boolean;
         soundEnabled: boolean;
@@ -33,20 +24,7 @@ export interface User {
         tasks: Task[];
         projects: Project[];
         profile: StudentProfile | null;
-        notes: Note[]; // New: User notes
     }
-}
-
-// Interfaces for Notes
-export interface Note {
-    id: string;
-    title: string;
-    content: string; // HTML or Text
-    type: 'text' | 'checklist';
-    items?: { text: string; done: boolean }[]; // For checklists
-    media?: string[]; // Array of image URLs
-    updatedAt: string;
-    color?: string; // For sticky note effect
 }
 
 // Interfaces for Schedule
@@ -107,10 +85,10 @@ export interface SleepSurvey {
 
 // SSR: Analysis Result Logic
 export interface AnalysisResultGroup {
-    groupName: string; // e.g., "Nhóm 1"
-    title: string; // e.g., "Lành mạnh"
+    groupName: string;
+    title: string;
     description: string;
-    color: string; // Tailwind class
+    color: string;
     advice: string[];
 }
 
@@ -118,7 +96,7 @@ export interface RoadmapPhase {
     phase: string;
     focus: string;
     duration: string;
-    details?: string; // Added details for clicking
+    details?: string;
 }
 
 export interface SSRAnalysis {
@@ -134,7 +112,7 @@ export interface SSRAnalysis {
 
 // SSR: Complete Profile
 export interface StudentProfile {
-    name: string; // Username
+    name: string;
     phoneSurvey: PhoneUsageSurvey;
     sleepSurvey: SleepSurvey;
     analysis: SSRAnalysis | null;
@@ -156,7 +134,7 @@ export interface ForumComment {
 }
 
 export interface ForumPost {
-    id: string;
+    id?: string; // Firebase sẽ tự cấp ID, nên để dấu ? (có thể trống lúc tạo)
     author: string;
     authorAvatar?: string;
     title: string;
@@ -164,5 +142,14 @@ export interface ForumPost {
     tags: string[];
     likes: string[];
     comments: ForumComment[];
+    createdAt: string;
+}
+
+// Interface for Feedback
+export interface Feedback {
+    id?: string; // Tương tự, Firebase sẽ tự cấp ID
+    user: string;
+    type: 'bug' | 'feature' | 'other';
+    content: string;
     createdAt: string;
 }

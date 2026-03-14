@@ -12,7 +12,7 @@ export const AppTrends: React.FC = () => {
         let completedTasks = 0;
         let totalStudyMinutes = 0;
         
-        const categoryCount: Record<string, number> = {
+        const categoryTime: Record<string, number> = {
             study: 0,
             project: 0,
             break: 0,
@@ -27,13 +27,17 @@ export const AppTrends: React.FC = () => {
                 if (task.completed) {
                     completedTasks++;
                 }
+                
+                const timeStr = task.actualDuration || task.duration || 0;
+                
                 if (task.actualDuration) {
                     totalStudyMinutes += task.actualDuration;
                 } else if (task.completed) {
                     totalStudyMinutes += (task.duration || 0);
                 }
-                if (task.category && categoryCount[task.category] !== undefined) {
-                    categoryCount[task.category]++;
+                
+                if (task.category && categoryTime[task.category] !== undefined) {
+                    categoryTime[task.category] += timeStr;
                 }
             });
         });
@@ -43,10 +47,10 @@ export const AppTrends: React.FC = () => {
         const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
         const categoryData = [
-            { name: 'Học tập', value: categoryCount.study, color: '#4f46e5' },
-            { name: 'Dự án', value: categoryCount.project, color: '#0ea5e9' },
-            { name: 'Ôn tập', value: categoryCount.review, color: '#f59e0b' },
-            { name: 'Nghỉ ngơi', value: categoryCount.break, color: '#10b981' },
+            { name: 'Học tập', value: Number((categoryTime.study / 60).toFixed(1)), color: '#4f46e5' },
+            { name: 'Dự án', value: Number((categoryTime.project / 60).toFixed(1)), color: '#0ea5e9' },
+            { name: 'Ôn tập', value: Number((categoryTime.review / 60).toFixed(1)), color: '#f59e0b' },
+            { name: 'Nghỉ ngơi', value: Number((categoryTime.break / 60).toFixed(1)), color: '#10b981' },
         ].filter(item => item.value > 0);
 
         return {
@@ -117,7 +121,7 @@ export const AppTrends: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Phân bổ hoạt động</h3>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Phân bổ hoạt động (Giờ)</h3>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -137,6 +141,7 @@ export const AppTrends: React.FC = () => {
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#374151', color: '#fff', borderRadius: '8px' }}
                                     itemStyle={{ color: '#fff' }}
+                                    formatter={(value: number) => [`${value} giờ`, 'Thời gian']}
                                 />
                                 <Legend />
                             </PieChart>
@@ -145,7 +150,7 @@ export const AppTrends: React.FC = () => {
                 </div>
                 
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Biểu đồ hoạt động (Số lượng)</h3>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Biểu đồ hoạt động (Giờ)</h3>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.categoryData}>
@@ -155,6 +160,7 @@ export const AppTrends: React.FC = () => {
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#374151', color: '#fff', borderRadius: '8px' }}
                                     cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                                    formatter={(value: number) => [`${value} giờ`, 'Thời gian']}
                                 />
                                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                                     {stats.categoryData.map((entry, index) => (

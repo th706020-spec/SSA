@@ -14,18 +14,18 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
     const [newPost, setNewPost] = useState({ title: '', content: '', tags: '' });
     const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
     const [commentText, setCommentText] = useState('');
-    const [isPosting, setIsPosting] = useState(false); // Trạng thái chờ khi đăng bài
     
     // State for filtering
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
-    // 1. LẤY DỮ LIỆU TỪ MÂY (Dùng Async/Await)
+    // HÀM MỚI: Tải dữ liệu từ Firebase
+    const fetchPosts = async () => {
+        const data = await forumService.getPosts();
+        setPosts(data);
+    };
+
     useEffect(() => {
-        const loadPosts = async () => {
-            const fetchedPosts = await forumService.getPosts();
-            setPosts(fetchedPosts);
-        };
-        loadPosts();
+        fetchPosts(); // Gọi lần đầu khi mở trang
     }, []);
 
     const tagCounts = posts.flatMap(p => p.tags).reduce((acc, tag) => {
@@ -39,15 +39,14 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
         ? posts.filter(p => p.tags.includes(selectedTag)) 
         : posts;
 
-    // 2. TẠO BÀI VIẾT (Gửi lên mây)
+    // ĐÃ SỬA: Đăng bài lên Firebase
     const handleCreatePost = async () => {
         if (!newPost.title || !newPost.content) return;
         
-        setIsPosting(true);
-        const post: ForumPost = {
-            id: '', // Id sẽ do hệ thống tự sinh ra
+        // Bỏ thuộc tính 'id' để Firebase tự cấp phát ID xịn
+        const post = {
             author: currentUser.username,
-            authorAvatar: currentUser.avatar,
+            authorAvatar: currentUser.avatar || '',
             title: newPost.title,
             content: newPost.content,
             tags: newPost.tags.split(',').map(t => t.trim()).filter(t => t),
@@ -55,65 +54,41 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
             comments: [],
             createdAt: new Date().toISOString()
         };
-
-        try {
-            // Đợi hệ thống lưu và trả về bài viết hoàn chỉnh (có ID thật)
-            const createdPost = await forumService.createPost(post);
-            
-            // Nối bài viết mới lên đầu danh sách hiển thị
-            setPosts([createdPost, ...posts]);
+        
+        const success = await forumService.createPost(post as any);
+        if (success) {
+            await fetchPosts(); // Tải lại danh sách từ Firebase để hiện bài mới
             setIsCreateModalOpen(false);
             setNewPost({ title: '', content: '', tags: '' });
-        } catch (error) {
-            console.error("Lỗi đăng bài:", error);
-        } finally {
-            setIsPosting(false);
+        } else {
+            alert("Có lỗi xảy ra khi đăng bài!");
         }
     };
 
-    // 3. THẢ TIM (Cập nhật ảo trên màn hình cho nhanh, âm thầm lưu lên mây sau)
+    // ĐÃ SỬA: Thả tim qua mạng
     const handleLike = async (postId: string) => {
-        // Cập nhật giao diện ngay lập tức cho mượt
-        setPosts(prevPosts => prevPosts.map(p => {
-            if (p.id === postId) {
-                const currentLikes = p.likes || [];
-                const hasLiked = currentLikes.includes(currentUser.username);
-                const newLikes = hasLiked 
-                    ? currentLikes.filter(u => u !== currentUser.username) 
-                    : [...currentLikes, currentUser.username];
-                return { ...p, likes: newLikes };
-            }
-            return p;
-        }));
-
-        // Âm thầm gửi lệnh thay đổi lên máy chủ
-        await forumService.toggleLike(postId, currentUser.username);
+        const success = await forumService.toggleLike(postId, currentUser.username);
+        if (success) {
+            await fetchPosts(); // Tải lại dữ liệu để cập nhật số tim
+        }
     };
 
-    // 4. BÌNH LUẬN
+    // ĐÃ SỬA: Bình luận qua mạng
     const handleComment = async (postId: string) => {
         if (!commentText.trim()) return;
         
-        const newCommentObj = {
-            id: Date.now().toString(), // ID tạm cho bình luận
+        const success = await forumService.addComment(postId, {
+            id: Date.now().toString(), // ID bình luận nội bộ
             author: currentUser.username,
             authorAvatar: currentUser.avatar || '',
             content: commentText,
             createdAt: new Date().toISOString()
-        };
+        } as any);
 
-        // Hiện bình luận lên màn hình ngay lập tức
-        setPosts(prevPosts => prevPosts.map(p => {
-            if (p.id === postId) {
-                return { ...p, comments: [...(p.comments || []), newCommentObj] };
-            }
-            return p;
-        }));
-        
-        setCommentText('');
-
-        // Lưu bình luận lên mây
-        await forumService.addComment(postId, newCommentObj);
+        if (success) {
+            await fetchPosts(); // Tải lại dữ liệu để hiện bình luận mới
+            setCommentText('');
+        }
     };
 
     return (
@@ -220,7 +195,7 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
 
                                 <div className="flex items-center gap-6 border-t border-gray-100 dark:border-gray-700 pt-4">
                                     <button 
-                                        onClick={() => handleLike(post.id)}
+                                        onClick={() => handleLike(post.id!)}
                                         className={`flex items-center gap-2 text-sm font-medium transition-colors ${(post.likes || []).includes(currentUser.username) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'}`}
                                     >
                                         <Heart className={`w-5 h-5 ${(post.likes || []).includes(currentUser.username) ? 'fill-current' : ''}`} />
@@ -252,7 +227,7 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                                             <span className="font-bold text-xs dark:text-white">{comment.author}</span>
                                                             <CheckCircle2 className="w-3 h-3 text-blue-500" title="Thành viên đã xác thực" />
                                                         </div>
-                                                        <span className="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString('vi-VN')}</span>
+                                                        <span className="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
                                                     </div>
                                                     <p className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</p>
                                                 </div>
@@ -267,11 +242,11 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                             onChange={(e) => setCommentText(e.target.value)}
                                             placeholder="Viết bình luận..." 
                                             className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1e1e2d] focus:outline-none focus:border-indigo-500 text-gray-900 dark:text-white shadow-sm"
-                                            onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id!)}
                                         />
                                         <button 
-                                            onClick={() => handleComment(post.id)}
-                                            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"
+                                            onClick={() => handleComment(post.id!)}
+                                            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 shadow-sm"
                                         >
                                             <Send className="w-5 h-5" />
                                         </button>
@@ -296,31 +271,26 @@ export const CommunityForum: React.FC<CommunityForumProps> = ({ currentUser }) =
                                 type="text" 
                                 placeholder="Tiêu đề bài viết" 
                                 value={newPost.title}
-                                disabled={isPosting}
                                 onChange={e => setNewPost({...newPost, title: e.target.value})}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                             <textarea 
                                 placeholder="Nội dung chia sẻ..." 
                                 rows={5}
                                 value={newPost.content}
-                                disabled={isPosting}
                                 onChange={e => setNewPost({...newPost, content: e.target.value})}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                             />
                             <input 
                                 type="text" 
                                 placeholder="Tags (cách nhau bởi dấu phẩy): Hỏi đáp, Tips..." 
                                 value={newPost.tags}
-                                disabled={isPosting}
                                 onChange={e => setNewPost({...newPost, tags: e.target.value})}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                             <div className="flex justify-end gap-2 pt-2">
-                                <button disabled={isPosting} onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium disabled:opacity-50">Hủy</button>
-                                <button disabled={isPosting} onClick={handleCreatePost} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2 disabled:opacity-70">
-                                    {isPosting ? 'Đang đăng...' : 'Đăng bài'}
-                                </button>
+                                <button onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium">Hủy</button>
+                                <button onClick={handleCreatePost} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">Đăng bài</button>
                             </div>
                         </div>
                     </div>

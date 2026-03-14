@@ -1,72 +1,62 @@
-import React, { useMemo } from 'react';
-import { authService } from '../services/authService';
+import React, { useState, useEffect } from 'react';
+import { analyticsService } from '../services/analyticsService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Activity, Users, CheckCircle, Clock } from 'lucide-react';
 
 export const AppTrends: React.FC = () => {
-    const stats = useMemo(() => {
-        const users = Object.values(authService.getUsers());
-        const totalUsers = users.length;
-        
-        let totalTasks = 0;
-        let completedTasks = 0;
-        let totalStudyMinutes = 0;
-        
-        const categoryTime: Record<string, number> = {
-            study: 0,
-            project: 0,
-            break: 0,
-            review: 0
-        };
+    // Tạo state để lưu trữ dữ liệu thay vì tính toán trực tiếp (useMemo)
+    const [stats, setStats] = useState({
+        totalUsers: 0,
+        avgTasksPerUser: '0',
+        avgStudyHoursPerUser: '0',
+        completionRate: 0,
+        categoryData: [] as { name: string; value: number; color: string }[]
+    });
+    
+    // State báo hiệu đang tải dữ liệu
+    const [isLoading, setIsLoading] = useState(true);
 
-        users.forEach(user => {
-            const tasks = user.data?.tasks || [];
-            totalTasks += tasks.length;
+    useEffect(() => {
+        const fetchTrends = async () => {
+            setIsLoading(true);
+            const data = await analyticsService.getGlobalTrends();
             
-            tasks.forEach(task => {
-                if (task.completed) {
-                    completedTasks++;
-                }
-                
-                const timeStr = task.actualDuration || task.duration || 0;
-                
-                if (task.actualDuration) {
-                    totalStudyMinutes += task.actualDuration;
-                } else if (task.completed) {
-                    totalStudyMinutes += (task.duration || 0);
-                }
-                
-                if (task.category && categoryTime[task.category] !== undefined) {
-                    categoryTime[task.category] += timeStr;
-                }
-            });
-        });
+            if (data) {
+                // Map lại dữ liệu từ Firebase cho khớp với màu sắc của biểu đồ
+                const formattedCategoryData = [
+                    { name: 'Học tập', value: Number((data.activityDistribution.study / 60).toFixed(1)), color: '#4f46e5' },
+                    { name: 'Dự án', value: Number((data.activityDistribution.project / 60).toFixed(1)), color: '#0ea5e9' },
+                    { name: 'Ôn tập', value: Number((data.activityDistribution.review / 60).toFixed(1)), color: '#f59e0b' },
+                    { name: 'Nghỉ ngơi', value: Number((data.activityDistribution.break / 60).toFixed(1)), color: '#10b981' },
+                ].filter(item => item.value > 0);
 
-        const avgTasksPerUser = totalUsers ? (totalTasks / totalUsers).toFixed(1) : '0';
-        const avgStudyHoursPerUser = totalUsers ? (totalStudyMinutes / 60 / totalUsers).toFixed(1) : '0';
-        const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-        const categoryData = [
-            { name: 'Học tập', value: Number((categoryTime.study / 60).toFixed(1)), color: '#4f46e5' },
-            { name: 'Dự án', value: Number((categoryTime.project / 60).toFixed(1)), color: '#0ea5e9' },
-            { name: 'Ôn tập', value: Number((categoryTime.review / 60).toFixed(1)), color: '#f59e0b' },
-            { name: 'Nghỉ ngơi', value: Number((categoryTime.break / 60).toFixed(1)), color: '#10b981' },
-        ].filter(item => item.value > 0);
-
-        return {
-            totalUsers,
-            avgTasksPerUser,
-            avgStudyHoursPerUser,
-            completionRate,
-            categoryData
+                setStats({
+                    totalUsers: data.totalUsers,
+                    avgTasksPerUser: data.avgTasksPerUser,
+                    avgStudyHoursPerUser: data.avgStudyHoursPerUser,
+                    completionRate: data.completionRate,
+                    categoryData: formattedCategoryData
+                });
+            }
+            setIsLoading(false);
         };
+
+        fetchTrends();
     }, []);
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-[60vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Xu hướng người dùng App</h2>
-                <p className="text-gray-500 dark:text-gray-400">Thống kê dữ liệu trung bình từ tất cả người dùng</p>
+                <p className="text-gray-500 dark:text-gray-400">Thống kê dữ liệu trung bình từ tất cả người dùng trên hệ thống</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -123,52 +113,60 @@ export const AppTrends: React.FC = () => {
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Phân bổ hoạt động (Giờ)</h3>
                     <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={stats.categoryData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {stats.categoryData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#374151', color: '#fff', borderRadius: '8px' }}
-                                    itemStyle={{ color: '#fff' }}
-                                    formatter={(value: number) => [`${value} giờ`, 'Thời gian']}
-                                />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
+                        {stats.categoryData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={stats.categoryData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {stats.categoryData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#374151', color: '#fff', borderRadius: '8px' }}
+                                        itemStyle={{ color: '#fff' }}
+                                        formatter={(value: number) => [`${value} giờ`, 'Thời gian']}
+                                    />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-gray-400">Chưa có dữ liệu hoạt động</div>
+                        )}
                     </div>
                 </div>
                 
                 <div className="bg-white dark:bg-[#1e1e2d] p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Biểu đồ hoạt động (Giờ)</h3>
                     <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.categoryData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-                                <XAxis dataKey="name" stroke="#9ca3af" />
-                                <YAxis stroke="#9ca3af" />
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#374151', color: '#fff', borderRadius: '8px' }}
-                                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                                    formatter={(value: number) => [`${value} giờ`, 'Thời gian']}
-                                />
-                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                    {stats.categoryData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                        {stats.categoryData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={stats.categoryData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                                    <XAxis dataKey="name" stroke="#9ca3af" />
+                                    <YAxis stroke="#9ca3af" />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#374151', color: '#fff', borderRadius: '8px' }}
+                                        cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                                        formatter={(value: number) => [`${value} giờ`, 'Thời gian']}
+                                    />
+                                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                        {stats.categoryData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-gray-400">Chưa có dữ liệu hoạt động</div>
+                        )}
                     </div>
                 </div>
             </div>
